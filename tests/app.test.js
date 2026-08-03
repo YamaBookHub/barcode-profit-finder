@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 
 import {
   DEFAULT_SETTINGS,
@@ -28,6 +29,18 @@ class MemoryStorage {
   setItem(key, value) { this.values.set(key, String(value)); }
   removeItem(key) { this.values.delete(key); }
 }
+
+test("公開用モジュールの依存URLを同じキャッシュ版へ統一する", () => {
+  const versions = new Set();
+  ["app.js", "storage.js", "camera-test.js"].forEach((filename) => {
+    const source = readFileSync(new URL(`../${filename}`, import.meta.url), "utf8");
+    const imports = [...source.matchAll(/from\s+"\.\/[^"?]+\.js\?v=(\d+)"/g)];
+    assert.ok(imports.length > 0, `${filename}にバージョン付き依存URLが必要です`);
+    imports.forEach((match) => versions.add(match[1]));
+    assert.doesNotMatch(source, /from\s+"\.\/[^"?]+\.js"/);
+  });
+  assert.equal(versions.size, 1);
+});
 
 test("利益、利益率、ROI、損益分岐売価を正しく計算する", () => {
   const result = calculateProfit({

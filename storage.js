@@ -4,7 +4,7 @@ import {
   normalizeSettings,
   toFiniteNumber,
   toNonNegative,
-} from "./calculator.js";
+} from "./calculator.js?v=15";
 
 export const STORAGE_KEYS = Object.freeze({
   items: "barcodeProfitFinder.items.v2",

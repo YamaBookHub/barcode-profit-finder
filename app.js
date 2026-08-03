@@ -10,11 +10,11 @@ import {
   normalizeMarketplace,
   normalizeSettings,
   toNonNegative,
-} from "./calculator.js?v=14";
-import { BarcodeScanner, PriceTagScanner, normalizeBarcode } from "./scanner.js?v=14";
-import { StorageRepository, itemsToCsv } from "./storage.js?v=14";
-import { isBookIsbn, lookupBookByIsbn } from "./product-lookup.js?v=14";
-import { parseSpokenNumber, speechErrorMessage, speechRecognitionConstructor } from "./voice-input.js?v=14";
+} from "./calculator.js?v=15";
+import { BarcodeScanner, PriceTagScanner, normalizeBarcode } from "./scanner.js?v=15";
+import { StorageRepository, itemsToCsv } from "./storage.js?v=15";
+import { isBookIsbn, lookupBookByIsbn } from "./product-lookup.js?v=15";
+import { parseSpokenNumber, speechErrorMessage, speechRecognitionConstructor } from "./voice-input.js?v=15";
 
 const byId = (id) => document.getElementById(id);
 const elements = {
