@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#0d766e">
-    <meta name="description" content="バーコードと店舗価格から、利益・ROI・回転率を約3秒で確認する店舗せどり向けスマホPWAです。">
+    <meta name="description" content="バーコードと店舗価格から、送料を含む利益・ROI・回転率をすばやく確認する店舗せどり向けスマホPWAです。">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="利益チェッカー">
@@ -13,9 +13,9 @@
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
-    <link rel="stylesheet" href="style.css?v=13">
+    <link rel="stylesheet" href="style.css?v=14">
     <script src="vendor/zxing-browser.min.js" defer></script>
-    <script type="module" src="app.js?v=13"></script>
+    <script type="module" src="app.js?v=14"></script>
   </head>
   <body>
     <a class="skip-link" href="#main">本文へ移動</a>
@@ -26,9 +26,12 @@
     </div>
 
     <header class="app-header">
-      <div>
-        <p class="eyebrow">店舗で3秒判断</p>
-        <h1>バーコード利益チェッカー</h1>
+      <div class="brand-lockup">
+        <img src="icons/icon.svg" alt="" width="48" height="48">
+        <div>
+          <p class="eyebrow">BARCODE PROFIT FINDER</p>
+          <h1>仕入れ判断を、もっと速く。</h1>
+        </div>
       </div>
       <button id="settingsOpenButton" class="icon-button" type="button" aria-label="判定設定を開く" aria-controls="settingsPanel" aria-expanded="false">
         <span aria-hidden="true">⚙︎</span><span>判定設定</span>
@@ -37,8 +40,8 @@
 
     <aside id="resultHero" class="result-hero is-empty" aria-live="polite" aria-atomic="true">
       <div>
-        <p id="heroKicker" class="result-kicker">利益計算に必須</p>
-        <p id="heroVerdict" class="hero-verdict">あと2つ：仕入価格・売却価格</p>
+        <p id="heroKicker" class="result-kicker">必須：仕入価格・売却価格・送料</p>
+        <p id="heroVerdict" class="hero-verdict">あと3つ入力</p>
       </div>
       <div class="hero-numbers">
         <p><span>予想利益</span><strong id="heroProfit">―</strong></p>
@@ -95,7 +98,7 @@
             <li>ほかのカメラアプリを閉じ、Safariを再起動します。</li>
           </ol>
           <button id="copyAppUrlButton" class="secondary-button" type="button">公開URLをコピー</button>
-          <a class="diagnostic-link" href="camera-test.html?v=13">カメラ端末診断を開く</a>
+          <a class="diagnostic-link" href="camera-test.html?v=14">カメラ端末診断を開く</a>
         </details>
         <div class="camera-controls">
           <button id="startScanButton" class="primary-button" type="button">カメラを開始</button>
@@ -109,17 +112,81 @@
         </label>
       </section>
 
-      <section id="purchase-section" class="card" aria-labelledby="purchaseHeading">
-        <div class="section-heading">
-          <p class="step-label"><span>2</span> 仕入価格</p>
-          <h2 id="purchaseHeading">値札を読む、または価格を入力</h2>
-          <p>OCR候補から選ぶか、数字を直接入力します。</p>
+      <section id="quick-section" class="card quick-card" aria-labelledby="quickHeading">
+        <div class="section-heading compact">
+          <p class="step-label"><span>2</span> 即判定</p>
+          <h2 id="quickHeading">ここだけ入れれば判定できます</h2>
+          <p>送料まで確認してから、安全な判定を表示します。</p>
         </div>
-        <button id="openPurchasePriceButton" class="price-entry-button is-required-missing" type="button">
-          <span><b class="required-badge">必須 1/2</b>仕入価格</span>
-          <strong id="purchasePriceDisplay">未入力</strong>
+
+        <label class="field-block" for="productNameInput"><span>商品名 <small>検索ではJANより優先</small></span></label>
+        <div class="quick-name-row">
+          <input id="productNameInput" type="text" enterkeyhint="next" placeholder="商品名を入力または音声入力">
+          <button class="voice-input-button compact-voice-button" type="button" data-voice-target="productNameInput" data-voice-mode="text" aria-label="商品名を話す"><span aria-hidden="true">🎤</span></button>
+        </div>
+        <p id="productLookupStatus" class="inline-hint" role="status">本のISBNはスキャン後に商品名を自動取得します。</p>
+
+        <div class="quick-price-stack">
+          <button id="openPurchasePriceButton" class="price-entry-button is-required-missing" type="button">
+            <span><b class="required-badge">必須 1/3</b>仕入価格</span>
+            <strong id="purchasePriceDisplay">未入力</strong>
+          </button>
+          <input id="purchasePriceInput" type="hidden" value="">
+        </div>
+
+        <fieldset class="quick-fieldset">
+          <legend><b class="required-badge">自動設定</b>販売先</legend>
+          <input id="marketplaceInput" type="hidden" value="mercari">
+          <div id="marketplaceOptions" class="marketplace-options">
+            <button type="button" data-marketplace="mercari" class="is-selected">メルカリ</button>
+            <button type="button" data-marketplace="yahooFlea">Yahoo!フリマ</button>
+            <button type="button" data-marketplace="yahooAuction">ヤフオク</button>
+            <button type="button" data-marketplace="amazon">Amazon</button>
+            <button type="button" data-marketplace="other">その他</button>
+          </div>
+          <p id="marketplaceStatus" class="quick-field-status">メルカリ・販売手数料10%</p>
+          <button id="openFeeRateButton" class="secondary-button quick-fee-button" type="button" hidden>販売手数料率を入力</button>
+        </fieldset>
+
+        <a id="quickMarketSearch" data-search="mercariSold" class="quick-market-search" href="#" rel="noopener noreferrer" aria-disabled="true">
+          <span><small>SOLD相場を確認</small><strong id="quickMarketSearchLabel">メルカリ売り切れ検索</strong></span><b aria-hidden="true">↗</b>
+        </a>
+
+        <button id="openSalePriceButton" class="price-entry-button sale-price-entry-button is-required-missing" type="button" aria-describedby="salePriceHelp">
+          <span><b class="required-badge">必須 2/3</b>想定売却価格</span>
+          <strong id="salePriceDisplay">未入力</strong>
         </button>
-        <input id="purchasePriceInput" type="hidden" value="">
+        <input id="salePriceInput" type="hidden" value="" aria-label="想定売却価格">
+        <p id="salePriceHelp" class="required-helper">相場を追加すると中央値が入ります。直接入力もできます。</p>
+
+        <fieldset class="quick-fieldset shipping-fieldset">
+          <legend><b class="required-badge">必須 3/3</b>送料</legend>
+          <div id="shippingOptions" class="shipping-options">
+            <button type="button" data-shipping="210"><strong>210円</strong><small>薄型</small></button>
+            <button type="button" data-shipping="450"><strong>450円</strong><small>小型</small></button>
+            <button type="button" data-shipping="750"><strong>750円</strong><small>中型</small></button>
+            <button type="button" data-shipping="1050"><strong>1,050円</strong><small>大型</small></button>
+            <button type="button" data-shipping="0"><strong>0円</strong><small>送料なし</small></button>
+            <button type="button" data-shipping="custom"><strong>その他</strong><small>金額入力</small></button>
+          </div>
+          <p id="shippingStatus" class="quick-field-status is-missing">送料を選んでください</p>
+        </fieldset>
+
+        <div id="decisionEvidence" class="decision-evidence is-incomplete" aria-live="polite">
+          <strong>判定の準備中</strong>
+          <span>仕入価格・売却価格・送料を入力してください。</span>
+        </div>
+        <div class="save-actions quick-save-actions">
+          <button id="saveItemButton" class="primary-button" type="button">この商品を保存</button>
+          <button id="cancelEditButton" class="secondary-button" type="button" hidden>編集をキャンセル</button>
+        </div>
+      </section>
+
+      <section id="purchase-section" class="card" aria-labelledby="purchaseHeading">
+        <details class="optional-details">
+          <summary id="purchaseHeading">値札OCR・店舗情報 <small>任意</small></summary>
+          <div class="optional-content">
+            <p class="optional-help">値札をカメラで読む場合や、店舗名を残す場合に使います。</p>
         <button id="openPriceScannerButton" class="scan-price-button" type="button"><span aria-hidden="true">▣</span> 値札をカメラで読み取る</button>
 
         <div id="priceScannerPanel" class="price-scanner-panel" hidden>
@@ -144,6 +211,8 @@
         <div class="form-grid purchase-fields">
           <label><span>店舗名</span><input id="storeNameInput" type="text" enterkeyhint="next" placeholder="例：○○店"></label>
         </div>
+          </div>
+        </details>
         <dialog id="purchasePriceDialog" class="price-entry-dialog" aria-labelledby="purchasePriceDialogHeading">
           <form id="purchasePriceDialogForm">
             <div class="dialog-heading">
@@ -170,14 +239,10 @@
       </section>
 
       <section id="search-section" class="card" aria-labelledby="searchHeading">
-        <div class="section-heading">
-          <p class="step-label"><span>3</span> 相場検索</p>
-          <h2 id="searchHeading">販売相場を調べる</h2>
-          <p>商品名があれば商品名で検索します。未入力のときだけJANコードを使います。</p>
-        </div>
-        <label class="field-block" for="productNameInput"><span>商品名（検索はこちらを優先）</span><input id="productNameInput" type="text" enterkeyhint="next" placeholder="例：ワイヤレスイヤホン"></label>
-        <button class="voice-input-button product-voice-button" type="button" data-voice-target="productNameInput" data-voice-mode="text"><span aria-hidden="true">🎤</span> 商品名を話す</button>
-        <p id="productLookupStatus" class="inline-hint" role="status">本のISBNはスキャン後に商品名を自動取得します。</p>
+        <details class="optional-details">
+          <summary id="searchHeading">ほかの販売先も調べる <small>任意</small></summary>
+          <div class="optional-content">
+            <p class="optional-help">即判定で選んだ販売先以外を比較するときに使います。</p>
         <div id="searchLinks" class="search-grid">
           <a data-search="google" class="search-button" href="#" rel="noopener noreferrer" aria-disabled="true">Google商品検索 <span aria-hidden="true">↗</span></a>
           <a data-search="mercari" class="search-button" href="#" rel="noopener noreferrer" aria-disabled="true">メルカリ検索 <span aria-hidden="true">↗</span></a>
@@ -189,13 +254,15 @@
         </div>
         <p id="searchHint" class="inline-hint">先にJANコードまたは商品名を入力してください。</p>
         <p class="network-note"><strong>検索モード：</strong>検索先は専用タブで開き、この入力画面は残ります。iPhoneのタブ切替で戻ると、価格キーパッドが開いた状態です。</p>
+          </div>
+        </details>
       </section>
 
       <section id="market-section" class="card" aria-labelledby="marketHeading">
         <div class="section-heading">
-          <p class="step-label"><span>4</span> 売却相場</p>
-          <h2 id="marketHeading">相場を自動入力</h2>
-          <p>過去に調べたJANは自動復元。初回は検索結果のスクリーンショットから価格を読み取れます。</p>
+          <p class="step-label">相場の根拠</p>
+          <h2 id="marketHeading">売れた価格を追加する</h2>
+          <p>最大5件の中央値を想定売価にします。スクショOCRは金額確認が必須です。</p>
         </div>
         <button id="marketScreenshotButton" class="market-screenshot-button" type="button">
           <span aria-hidden="true">▣</span>
@@ -205,6 +272,7 @@
         <canvas id="marketOcrCanvas" width="1" height="1" hidden></canvas>
         <progress id="marketOcrProgress" class="ocr-progress" max="1" value="0" hidden></progress>
         <p id="marketOcrStatus" class="status-message" role="status">メルカリ等の検索結果をスクリーンショットし、このボタンから選びます。</p>
+        <button id="confirmMarketPricesButton" class="primary-button confirm-market-button" type="button" hidden>OCRの金額を確認しました</button>
         <button id="openMarketPriceButton" class="market-add-button" type="button">
           <span><b aria-hidden="true">＋</b> 売れた価格を追加</span>
           <strong id="marketPriceButtonCount">0/5件</strong>
@@ -248,13 +316,6 @@
           <div><dt>最高値</dt><dd id="maximumResult">―</dd></div>
           <div><dt>相場件数</dt><dd id="marketCountResult">0件</dd></div>
         </dl>
-        <button id="openSalePriceButton" class="price-entry-button sale-price-entry-button is-required-missing" type="button" aria-describedby="salePriceHelp">
-          <span><b class="required-badge">必須 2/2</b>想定売却価格</span>
-          <strong id="salePriceDisplay">未入力</strong>
-        </button>
-        <input id="salePriceInput" type="hidden" value="" aria-label="想定売却価格">
-        <p id="salePriceHelp" class="required-helper">相場を入力すると中央値が自動で入ります。ここをタップして直接入力もできます。</p>
-
         <details class="turnover-panel">
           <summary>回転率も確認する <small>売れやすさの目安</small></summary>
           <div class="form-grid turnover-fields">
@@ -270,14 +331,13 @@
       </section>
 
       <section id="verdict-section" class="card calculation-card" aria-labelledby="resultHeading">
-        <div class="section-heading">
-          <p class="step-label"><span>5</span> 判定</p>
-          <h2 id="resultHeading">費用を入れて最終判断</h2>
-          <p>ROIは、仕入価格に対して何%の利益が出るかを示します。</p>
-        </div>
+        <details class="optional-details">
+          <summary id="resultHeading">計算内訳・追加経費 <small>詳細</small></summary>
+          <div class="optional-content">
+            <p class="optional-help">ROIは、仕入価格に対して何%の利益が出るかを示します。</p>
         <form id="profitForm" class="form-grid" autocomplete="off">
           <label><span>販売手数料率</span><span class="input-with-unit"><input id="feeRateInput" type="number" min="0" max="100" step="0.1" inputmode="decimal" value="10"><span>%</span></span></label>
-          <label><span>送料</span><span class="input-with-unit"><input id="shippingInput" type="number" min="0" step="1" inputmode="numeric" value="0"><span>円</span></span></label>
+          <label><span>送料 <em>必須</em></span><span class="input-with-unit"><input id="shippingInput" type="number" min="0" step="1" inputmode="numeric" value=""><span>円</span></span></label>
           <label><span>梱包費</span><span class="input-with-unit"><input id="packagingInput" type="number" min="0" step="1" inputmode="numeric" value="0"><span>円</span></span></label>
           <label><span>その他経費</span><span class="input-with-unit"><input id="otherCostsInput" type="number" min="0" step="1" inputmode="numeric" value="0"><span>円</span></span></label>
           <label class="full-width"><span>メモ</span><textarea id="noteInput" rows="3" placeholder="状態、棚番号、注意点など"></textarea></label>
@@ -291,10 +351,8 @@
           <div><dt>損益分岐売価</dt><dd id="breakEvenResult">0円</dd></div>
         </dl>
         <p class="formula-note">利益＝売価－手数料－送料－梱包費－その他経費－仕入価格。手数料は1円未満を切り捨てます。</p>
-        <div class="save-actions">
-          <button id="saveItemButton" class="primary-button" type="button">この商品を保存</button>
-          <button id="cancelEditButton" class="secondary-button" type="button" hidden>編集をキャンセル</button>
-        </div>
+          </div>
+        </details>
       </section>
 
       <section id="saved-section" class="card saved-card" aria-labelledby="savedHeading">
@@ -329,13 +387,13 @@
         </div>
         <div class="tutorial-slide" data-tutorial-slide="1" hidden>
           <span class="tutorial-icon" aria-hidden="true">¥</span>
-          <h2>値札を読むか手入力</h2>
-          <p>OCRは任意です。候補金額をタップすると仕入価格へ入ります。誤認識時は手入力できます。</p>
+          <h2>3つの必須項目を入力</h2>
+          <p>仕入価格・売却価格・送料を大きなボタンから入力します。iPhoneのキーボードは開きません。</p>
         </div>
         <div class="tutorial-slide" data-tutorial-slide="2" hidden>
           <span class="tutorial-icon" aria-hidden="true">✓</span>
-          <h2>相場を入れて即判断</h2>
-          <p>販売済み価格を入れると中央値を自動採用。「買い・要確認・見送り」は画面下の固定バーですぐ確認できます。</p>
+          <h2>根拠つきの判定を確認</h2>
+          <p>売れた価格を追加すると中央値を自動採用。利益・ROIと計算式を見て「買い・要確認・見送り」を判断できます。</p>
         </div>
         <div class="tutorial-actions">
           <button id="tutorialSkipButton" class="text-button" type="button">スキップ</button>
@@ -373,15 +431,15 @@
 
     <nav class="bottom-nav" aria-label="主要画面">
       <a href="#scan-section"><span aria-hidden="true">▤</span>スキャン</a>
-      <a href="#purchase-section"><span aria-hidden="true">¥</span>仕入</a>
-      <a href="#search-section"><span aria-hidden="true">⌕</span>相場</a>
-      <a href="#verdict-section"><span aria-hidden="true">✓</span>判定</a>
+      <a href="#quick-section"><span aria-hidden="true">✓</span>即判定</a>
+      <a href="#market-section"><span aria-hidden="true">⌕</span>相場</a>
+      <a href="#verdict-section"><span aria-hidden="true">¥</span>費用</a>
       <a href="#saved-section"><span aria-hidden="true">▣</span>保存</a>
     </nav>
 
     <footer class="app-footer">
       <p>Barcode Profit Finder</p>
-      <p>日付ずれ修正 v13</p>
+      <p>安全な即判定 v14</p>
       <p>最終判断は商品の状態、需要、各サイトの規約も確認してください。</p>
     </footer>
     <noscript>このアプリを使うにはJavaScriptを有効にしてください。</noscript>

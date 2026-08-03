@@ -1,18 +1,20 @@
 import {
   DEFAULT_SETTINGS,
+  MARKETPLACES,
   VERDICTS,
   buildSearchUrls,
   calculateMarketStats,
   calculateProfit,
   calculateTurnover,
   judgePurchase,
+  normalizeMarketplace,
   normalizeSettings,
   toNonNegative,
-} from "./calculator.js?v=13";
-import { BarcodeScanner, PriceTagScanner, normalizeBarcode } from "./scanner.js?v=13";
-import { StorageRepository, itemsToCsv } from "./storage.js?v=13";
-import { isBookIsbn, lookupBookByIsbn } from "./product-lookup.js?v=13";
-import { parseSpokenNumber, speechErrorMessage, speechRecognitionConstructor } from "./voice-input.js?v=13";
+} from "./calculator.js?v=14";
+import { BarcodeScanner, PriceTagScanner, normalizeBarcode } from "./scanner.js?v=14";
+import { StorageRepository, itemsToCsv } from "./storage.js?v=14";
+import { isBookIsbn, lookupBookByIsbn } from "./product-lookup.js?v=14";
+import { parseSpokenNumber, speechErrorMessage, speechRecognitionConstructor } from "./voice-input.js?v=14";
 
 const byId = (id) => document.getElementById(id);
 const elements = {
@@ -66,12 +68,22 @@ const elements = {
   storeNameInput: byId("storeNameInput"),
   productNameInput: byId("productNameInput"),
   productLookupStatus: byId("productLookupStatus"),
+  marketplaceInput: byId("marketplaceInput"),
+  marketplaceOptions: byId("marketplaceOptions"),
+  marketplaceStatus: byId("marketplaceStatus"),
+  openFeeRateButton: byId("openFeeRateButton"),
+  quickMarketSearch: byId("quickMarketSearch"),
+  quickMarketSearchLabel: byId("quickMarketSearchLabel"),
+  shippingOptions: byId("shippingOptions"),
+  shippingStatus: byId("shippingStatus"),
+  decisionEvidence: byId("decisionEvidence"),
   searchHint: byId("searchHint"),
   marketScreenshotButton: byId("marketScreenshotButton"),
   marketScreenshotInput: byId("marketScreenshotInput"),
   marketOcrCanvas: byId("marketOcrCanvas"),
   marketOcrProgress: byId("marketOcrProgress"),
   marketOcrStatus: byId("marketOcrStatus"),
+  confirmMarketPricesButton: byId("confirmMarketPricesButton"),
   openMarketPriceButton: byId("openMarketPriceButton"),
   marketPriceButtonCount: byId("marketPriceButtonCount"),
   marketPriceList: byId("marketPriceList"),
@@ -153,6 +165,8 @@ let currentTurnover = calculateTurnover();
 let currentSearchUrls = buildSearchUrls("");
 let editingId = null;
 let salePriceIsAutomatic = true;
+let shippingConfirmed = false;
+let marketPricesNeedConfirmation = false;
 let highProfitNotified = false;
 let editingMarketPriceIndex = null;
 let lastRestoredBarcode = "";
@@ -281,6 +295,72 @@ function makeId() {
   return globalThis.crypto?.randomUUID?.() ?? `item-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+function marketplaceProfile() {
+  return MARKETPLACES[normalizeMarketplace(elements.marketplaceInput.value)];
+}
+
+function syncMarketplaceDisplay() {
+  const key = normalizeMarketplace(elements.marketplaceInput.value);
+  const profile = MARKETPLACES[key];
+  elements.marketplaceInput.value = key;
+  elements.marketplaceOptions.querySelectorAll("[data-marketplace]").forEach((button) => {
+    const selected = button.dataset.marketplace === key;
+    button.classList.toggle("is-selected", selected);
+    button.setAttribute("aria-pressed", String(selected));
+  });
+  const feeRate = elements.feeRateInput.value;
+  elements.marketplaceStatus.textContent = feeRate === ""
+    ? `${profile.label}・販売手数料率を入力してください`
+    : `${profile.label}・販売手数料${feeRate}%（変更可）`;
+  elements.marketplaceStatus.classList.toggle("is-missing", feeRate === "");
+  elements.openFeeRateButton.hidden = false;
+  elements.openFeeRateButton.textContent = feeRate === ""
+    ? "販売手数料率を入力"
+    : `手数料${feeRate}%を変更`;
+  elements.quickMarketSearch.dataset.search = profile.searchKey;
+  elements.quickMarketSearchLabel.textContent = profile.searchLabel;
+}
+
+function selectMarketplace(key, { applyPreset = true } = {}) {
+  const normalized = normalizeMarketplace(key);
+  const profile = MARKETPLACES[normalized];
+  elements.marketplaceInput.value = normalized;
+  if (applyPreset) elements.feeRateInput.value = profile.feeRate === null ? "" : String(profile.feeRate);
+  syncMarketplaceDisplay();
+  updateSearchLinks();
+  renderCalculation();
+  scheduleDraftSave();
+}
+
+function syncShippingDisplay() {
+  const value = elements.shippingInput.value;
+  elements.shippingOptions.querySelectorAll("[data-shipping]").forEach((button) => {
+    const preset = button.dataset.shipping;
+    const selected = shippingConfirmed && (preset === value || (
+      preset === "custom" && !["0", "210", "450", "750", "1050"].includes(value)
+    ));
+    button.classList.toggle("is-selected", selected);
+    button.setAttribute("aria-pressed", String(selected));
+  });
+  elements.shippingStatus.classList.toggle("is-missing", !shippingConfirmed);
+  elements.shippingStatus.textContent = shippingConfirmed
+    ? `送料 ${formatCurrency(toNonNegative(value))} を計算に使用`
+    : "送料を選んでください";
+}
+
+function selectShipping(value) {
+  if (value === "custom") {
+    openNumberInputEditor(elements.shippingInput);
+    return;
+  }
+  elements.shippingInput.value = String(value);
+  shippingConfirmed = true;
+  syncShippingDisplay();
+  renderCalculation();
+  scheduleDraftSave();
+  if (navigator.vibrate) navigator.vibrate(20);
+}
+
 function valuesForCalculation() {
   return {
     purchasePrice: elements.purchasePriceInput.value,
@@ -293,22 +373,58 @@ function valuesForCalculation() {
 }
 
 function hasDecisionInputs() {
-  return elements.purchasePriceInput.value !== "" && elements.salePriceInput.value !== "";
+  return elements.purchasePriceInput.value !== ""
+    && elements.salePriceInput.value !== ""
+    && elements.feeRateInput.value !== ""
+    && shippingConfirmed
+    && !marketPricesNeedConfirmation;
 }
 
 function missingDecisionInputs() {
   const missing = [];
   if (elements.purchasePriceInput.value === "") missing.push("仕入価格");
   if (elements.salePriceInput.value === "") missing.push("売却価格");
+  if (elements.feeRateInput.value === "") missing.push("手数料");
+  if (!shippingConfirmed) missing.push("送料");
+  if (marketPricesNeedConfirmation) missing.push("OCR価格確認");
   return missing;
+}
+
+function renderDecisionEvidence(marketStats) {
+  const missing = missingDecisionInputs();
+  elements.decisionEvidence.replaceChildren();
+  const title = document.createElement("strong");
+  const formula = document.createElement("span");
+  const confidence = document.createElement("small");
+  if (missing.length > 0) {
+    elements.decisionEvidence.className = "decision-evidence is-incomplete";
+    title.textContent = `あと${missing.length}つで判定`;
+    formula.textContent = missing.join("・");
+    confidence.textContent = "未入力の費用を0円として判定することはありません。";
+  } else {
+    const extraCosts = currentCalculation.packaging + currentCalculation.otherCosts;
+    const profile = marketplaceProfile();
+    elements.decisionEvidence.className = marketStats.count > 0
+      ? "decision-evidence is-supported"
+      : "decision-evidence is-warning";
+    title.textContent = `${profile.label}で ${VERDICTS[currentVerdict].display}`;
+    formula.textContent = `${formatCurrency(currentCalculation.salePrice)} − 手数料${formatCurrency(currentCalculation.fee)} − 送料${formatCurrency(currentCalculation.shipping)} − その他${formatCurrency(extraCosts)} − 仕入${formatCurrency(currentCalculation.purchasePrice)} ＝ 利益${formatCurrency(currentCalculation.profit)}`;
+    confidence.textContent = marketStats.count > 0
+      ? `売れた価格${marketStats.count}件の中央値を使用しています。`
+      : "相場価格0件の暫定判定です。SOLD相場を確認してください。";
+  }
+  elements.decisionEvidence.append(title, formula, confidence);
 }
 
 function renderCalculation() {
   syncPurchasePriceDisplay();
   syncSalePriceDisplay();
+  syncMarketplaceDisplay();
+  syncShippingDisplay();
   currentCalculation = calculateProfit(valuesForCalculation());
   currentVerdict = judgePurchase(currentCalculation, settings);
   const verdict = VERDICTS[currentVerdict];
+  const marketStats = calculateMarketStats(elements.marketPriceInputs.map((input) => input.value));
 
   elements.feeResult.textContent = formatCurrency(currentCalculation.fee);
   elements.netResult.textContent = formatCurrency(currentCalculation.net);
@@ -320,18 +436,22 @@ function renderCalculation() {
   elements.resultHero.className = "result-hero";
   if (hasDecisionInputs()) {
     elements.resultHero.classList.add(`is-${verdict.tone}`);
-    elements.heroKicker.textContent = "仕入判定";
+    elements.heroKicker.textContent = marketStats.count > 0
+      ? `仕入判定・相場${marketStats.count}件`
+      : "暫定判定・相場根拠なし";
     elements.heroVerdict.textContent = verdict.display;
     elements.heroProfit.textContent = formatCurrency(currentCalculation.profit);
     elements.heroRoi.textContent = formatPercent(currentCalculation.roi);
   } else {
     const missing = missingDecisionInputs();
     elements.resultHero.classList.add("is-empty");
-    elements.heroKicker.textContent = "利益計算に必須";
-    elements.heroVerdict.textContent = `あと${missing.length}つ：${missing.join("・")}`;
+    elements.heroKicker.textContent = `必須：${missing.join("・")}`;
+    elements.heroVerdict.textContent = `あと${missing.length}つ入力`;
     elements.heroProfit.textContent = "―";
     elements.heroRoi.textContent = "―";
   }
+
+  renderDecisionEvidence(marketStats);
 
   const shouldNotify = hasDecisionInputs()
     && currentCalculation.profit >= settings.highProfitVibration;
@@ -655,9 +775,13 @@ function restoreSavedMarket(code) {
   ));
   if (!previous) return false;
   lastRestoredBarcode = normalized;
+  marketPricesNeedConfirmation = false;
+  elements.confirmMarketPricesButton.hidden = true;
   if (!elements.productNameInput.value && previous.productName) elements.productNameInput.value = previous.productName;
+  elements.marketplaceInput.value = normalizeMarketplace(previous.marketplace);
   elements.feeRateInput.value = previous.feeRate ?? elements.feeRateInput.value;
   elements.shippingInput.value = previous.shipping ?? elements.shippingInput.value;
+  shippingConfirmed = previous.shippingConfirmed !== false;
   elements.packagingInput.value = previous.packaging ?? elements.packagingInput.value;
   elements.otherCostsInput.value = previous.otherCosts ?? elements.otherCostsInput.value;
   const previousPrices = previous.marketPrices ?? [];
@@ -699,7 +823,7 @@ const barcodeScanner = new BarcodeScanner({
     elements.scanSuccess.hidden = false;
     window.setTimeout(() => { elements.scanSuccess.hidden = true; }, 900);
     showToast(`バーコード ${code} を読み取りました`);
-    document.getElementById("purchase-section").scrollIntoView({ behavior: "smooth", block: "start" });
+    document.getElementById("quick-section").scrollIntoView({ behavior: "smooth", block: "start" });
   },
 });
 
@@ -743,17 +867,21 @@ async function readMarketScreenshot(file) {
   elements.marketScreenshotButton.disabled = false;
   elements.marketOcrProgress.hidden = true;
   if (result.candidates.length === 0) {
-    setMessage(elements.marketOcrStatus, "価格を見つけられませんでした。価格が大きく表示されたスクリーンショットを選んでください。");
+    marketPricesNeedConfirmation = false;
+    elements.confirmMarketPricesButton.hidden = true;
+    setMessage(elements.marketOcrStatus, "￥または円付きの価格を見つけられませんでした。誤判定防止のため、ほかの数字は採用していません。手入力も利用できます。");
     return;
   }
   elements.marketPriceInputs.forEach((input, index) => {
     input.value = result.candidates[index] ?? "";
   });
   salePriceIsAutomatic = true;
+  marketPricesNeedConfirmation = true;
+  elements.confirmMarketPricesButton.hidden = false;
   const stats = renderMarketStats();
   scheduleDraftSave();
-  setMessage(elements.marketOcrStatus, `${stats.count}件を読み取りました。金額を確認し、違う候補は×で削除してください。`);
-  showToast(`相場${stats.count}件と中央値を自動入力しました`, 3600);
+  setMessage(elements.marketOcrStatus, `${stats.count}件を読み取りました。誤った金額は×で削除し、確認ボタンを押してください。`);
+  showToast(`相場${stats.count}件を抽出しました。金額確認が必要です`, 3600);
 }
 
 function openPriceScanner() {
@@ -850,6 +978,9 @@ function draftValues() {
     activeCount: elements.activeCountInput.value,
     recentSaleDate: elements.recentSaleDateInput.value,
     checkedDate: elements.checkedDateInput.value,
+    marketplace: normalizeMarketplace(elements.marketplaceInput.value),
+    shippingConfirmed,
+    marketPricesNeedConfirmation,
     salePriceIsAutomatic,
     marketSearchPending,
   };
@@ -889,8 +1020,9 @@ function restoreDraft() {
   elements.productNameInput.value = draft.productName;
   elements.purchasePriceInput.value = draft.purchasePrice;
   elements.salePriceInput.value = draft.salePrice;
-  elements.feeRateInput.value = draft.feeRate || "10";
-  elements.shippingInput.value = draft.shipping || "0";
+  elements.marketplaceInput.value = normalizeMarketplace(draft.marketplace);
+  elements.feeRateInput.value = draft.feeRate;
+  elements.shippingInput.value = draft.shipping;
   elements.packagingInput.value = draft.packaging || "0";
   elements.otherCostsInput.value = draft.otherCosts || "0";
   elements.storeNameInput.value = draft.storeName;
@@ -901,6 +1033,9 @@ function restoreDraft() {
   elements.recentSaleDateInput.value = draft.recentSaleDate;
   elements.checkedDateInput.value = draft.checkedDate || localDateValue();
   salePriceIsAutomatic = draft.salePriceIsAutomatic;
+  shippingConfirmed = draft.shippingConfirmed;
+  marketPricesNeedConfirmation = draft.marketPricesNeedConfirmation;
+  elements.confirmMarketPricesButton.hidden = !marketPricesNeedConfirmation;
   marketSearchPending = draft.marketSearchPending;
   lastRestoredBarcode = draft.barcode;
   lastProductLookupBarcode = draft.productName ? draft.barcode : "";
@@ -910,6 +1045,7 @@ function restoreDraft() {
     ? "入力途中の商品名を復元しました。この商品名を優先して検索します。"
     : "入力途中の内容を復元しました。");
   syncPurchasePriceDisplay();
+  syncMarketplaceDisplay();
   updateSearchLinks();
   renderMarketStats({ updateSalePrice: false });
   renderTurnover();
@@ -923,10 +1059,12 @@ function currentItem(existing) {
     id: existing?.id ?? makeId(),
     productName: elements.productNameInput.value.trim(),
     barcode: normalizeBarcode(elements.barcodeInput.value),
+    marketplace: normalizeMarketplace(elements.marketplaceInput.value),
     purchasePrice: currentCalculation.purchasePrice,
     salePrice: currentCalculation.salePrice,
     feeRate: currentCalculation.feeRate,
     shipping: currentCalculation.shipping,
+    shippingConfirmed,
     packaging: currentCalculation.packaging,
     otherCosts: currentCalculation.otherCosts,
     fee: currentCalculation.fee,
@@ -963,6 +1101,12 @@ function clearProductForm() {
   elements.purchasePriceInput.value = "";
   syncPurchasePriceDisplay();
   elements.salePriceInput.value = "";
+  elements.marketplaceInput.value = "mercari";
+  elements.feeRateInput.value = String(MARKETPLACES.mercari.feeRate);
+  elements.shippingInput.value = "";
+  shippingConfirmed = false;
+  marketPricesNeedConfirmation = false;
+  elements.confirmMarketPricesButton.hidden = true;
   lastRestoredBarcode = "";
   lastProductLookupBarcode = "";
   productLookupController?.abort();
@@ -977,6 +1121,7 @@ function clearProductForm() {
   elements.cancelEditButton.hidden = true;
   salePriceIsAutomatic = true;
   highProfitNotified = false;
+  syncMarketplaceDisplay();
   updateSearchLinks();
   renderMarketStats();
   renderTurnover();
@@ -993,6 +1138,21 @@ function saveCurrentItem() {
   if (toNonNegative(elements.salePriceInput.value) <= 0) {
     showToast("想定売却価格を入力してください");
     openNumberInputEditor(elements.salePriceInput);
+    return;
+  }
+  if (elements.feeRateInput.value === "") {
+    showToast("販売手数料率を入力してください");
+    openNumberInputEditor(elements.feeRateInput);
+    return;
+  }
+  if (!shippingConfirmed) {
+    showToast("送料を選んでください");
+    document.getElementById("quick-section").scrollIntoView({ behavior: "smooth", block: "start" });
+    return;
+  }
+  if (marketPricesNeedConfirmation) {
+    showToast("OCRで読み取った相場価格を確認してください", 3600);
+    document.getElementById("market-section").scrollIntoView({ behavior: "smooth", block: "start" });
     return;
   }
 
@@ -1019,8 +1179,12 @@ function fillItemForm(item) {
   elements.purchasePriceInput.value = item.purchasePrice ?? "";
   syncPurchasePriceDisplay();
   elements.salePriceInput.value = item.salePrice ?? "";
+  elements.marketplaceInput.value = normalizeMarketplace(item.marketplace);
   elements.feeRateInput.value = item.feeRate ?? 10;
   elements.shippingInput.value = item.shipping ?? 0;
+  shippingConfirmed = item.shippingConfirmed !== false;
+  marketPricesNeedConfirmation = false;
+  elements.confirmMarketPricesButton.hidden = true;
   elements.packagingInput.value = item.packaging ?? 0;
   elements.otherCostsInput.value = item.otherCosts ?? 0;
   elements.storeNameInput.value = item.storeName;
@@ -1034,6 +1198,8 @@ function fillItemForm(item) {
   elements.cancelEditButton.hidden = false;
   salePriceIsAutomatic = false;
   highProfitNotified = false;
+  syncMarketplaceDisplay();
+  syncShippingDisplay();
   updateSearchLinks();
   renderMarketStats({ updateSalePrice: false });
   renderTurnover();
@@ -1084,6 +1250,7 @@ function renderSavedItems() {
     metrics.append(
       createMetric("仕入", formatCurrency(item.purchasePrice)),
       createMetric("売価", formatCurrency(item.salePrice)),
+      createMetric("販売先", MARKETPLACES[normalizeMarketplace(item.marketplace)].label),
       createMetric("利益", formatCurrency(item.profit)),
       createMetric("ROI", formatPercent(item.roi)),
       createMetric("利益率", formatPercent(item.margin)),
@@ -1176,6 +1343,15 @@ function registerEvents() {
       ? "この商品名を優先して検索します。"
       : "本のISBNはスキャン後に商品名を自動取得します。");
   });
+  elements.marketplaceOptions.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-marketplace]");
+    if (button) selectMarketplace(button.dataset.marketplace);
+  });
+  elements.shippingOptions.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-shipping]");
+    if (button) selectShipping(button.dataset.shipping);
+  });
+  elements.openFeeRateButton.addEventListener("click", () => openNumberInputEditor(elements.feeRateInput));
   document.querySelectorAll("[data-search]").forEach((link) => {
     link.addEventListener("click", (event) => {
       if (link.getAttribute("aria-disabled") === "true") {
@@ -1229,6 +1405,13 @@ function registerEvents() {
     elements.marketScreenshotInput.value = "";
     if (file) await readMarketScreenshot(file);
   });
+  elements.confirmMarketPricesButton.addEventListener("click", () => {
+    marketPricesNeedConfirmation = false;
+    elements.confirmMarketPricesButton.hidden = true;
+    renderCalculation();
+    scheduleDraftSave();
+    showToast("OCRの相場価格を確定しました");
+  });
   elements.openMarketPriceButton.addEventListener("click", () => openMarketPriceEditor());
   elements.finishMarketPriceButton.addEventListener("click", closeMarketPriceEditor);
   elements.marketPriceDialog.addEventListener("cancel", () => {
@@ -1248,10 +1431,16 @@ function registerEvents() {
   });
   elements.salePriceInput.addEventListener("input", () => {
     salePriceIsAutomatic = false;
+    marketPricesNeedConfirmation = false;
+    elements.confirmMarketPricesButton.hidden = true;
     renderCalculation();
   });
-  [elements.feeRateInput, elements.shippingInput,
-    elements.packagingInput, elements.otherCostsInput].forEach((input) => input.addEventListener("input", renderCalculation));
+  elements.feeRateInput.addEventListener("input", renderCalculation);
+  elements.shippingInput.addEventListener("input", () => {
+    shippingConfirmed = elements.shippingInput.value !== "";
+    renderCalculation();
+  });
+  [elements.packagingInput, elements.otherCostsInput].forEach((input) => input.addEventListener("input", renderCalculation));
   [elements.soldCountInput, elements.activeCountInput, elements.recentSaleDateInput,
     elements.checkedDateInput].forEach((input) => input.addEventListener("input", renderTurnover));
 
@@ -1276,7 +1465,7 @@ function registerEvents() {
       return;
     }
     fillItemForm(item);
-    document.getElementById("verdict-section").scrollIntoView({ behavior: "smooth", block: "start" });
+    document.getElementById("quick-section").scrollIntoView({ behavior: "smooth", block: "start" });
     showToast(button.dataset.action === "recalculate" ? "最新条件で再計算できます" : "商品を編集中です");
   });
 
@@ -1388,7 +1577,12 @@ async function registerServiceWorker() {
 
 function initialize() {
   elements.checkedDateInput.value = localDateValue();
+  elements.marketplaceInput.value = "mercari";
+  elements.feeRateInput.value = String(MARKETPLACES.mercari.feeRate);
+  elements.shippingInput.value = "";
+  shippingConfirmed = false;
   settingsToForm();
+  syncMarketplaceDisplay();
   registerEvents();
   const draftRestored = restoreDraft();
   if (!draftRestored) {
@@ -1405,7 +1599,6 @@ function initialize() {
     elements.marketPriceDialogStatus.textContent = "検索結果で確認した売却価格を入力してください。";
   }, 350);
   if (draftRestored) window.setTimeout(() => showToast("検索前の入力内容を復元しました"), 300);
-  if (!repository.hasSeenTutorial()) window.setTimeout(() => showTutorial(0), 250);
 }
 
 initialize();

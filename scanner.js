@@ -242,16 +242,19 @@ function normalizeOcrText(text) {
     .replace(/[０-９]/g, (digit) => String(digit.charCodeAt(0) - 0xff10))
     .replaceAll("，", ",")
     .replaceAll("．", ".")
-    .replace(/(\d)\s+(?=\d)/g, "$1");
+    // OCRが「1 980」のように千区切りを空白で返した場合だけ連結する。
+    // 単純に全数字間の空白を消すと「3980 50%」が398050になるため避ける。
+    .replace(/(\d)\s+(?=\d{3}(?:\D|$))/g, "$1");
 }
 
-export function extractPriceCandidates(text, limit = 6, { deduplicate = true } = {}) {
+export function extractPriceCandidates(text, limit = 6, { deduplicate = true, requireCurrency = false } = {}) {
   const normalized = normalizeOcrText(text);
   const matches = normalized.match(/[¥￥]?\s*\d[\d,.]{1,10}\s*円?/g) ?? [];
   const ranked = [];
   const seen = new Set();
 
   matches.forEach((match, index) => {
+    if (requireCurrency && !/[¥￥円]/.test(match)) return;
     const digits = match.replace(/[^\d]/g, "");
     if (digits.length < 2 || digits.length > 8) return;
     const value = Number(digits);
@@ -417,7 +420,7 @@ export class PriceTagScanner {
     try {
       source = await loadImageFile(file);
       preprocessImageSource(source, this.canvas);
-      return await this.recognizeCanvas({ pageSegMode: "11", deduplicate: false, limit: 5 });
+      return await this.recognizeCanvas({ pageSegMode: "11", deduplicate: false, limit: 5, requireCurrency: true });
     } catch (error) {
       this.onError(error?.message || "相場画像を読み取れませんでした。別の画像を選ぶか、価格を手入力してください。");
       return { candidates: [], text: "" };
@@ -427,7 +430,7 @@ export class PriceTagScanner {
     }
   }
 
-  async recognizeCanvas({ pageSegMode = "6", deduplicate = true, limit = 6 } = {}) {
+  async recognizeCanvas({ pageSegMode = "6", deduplicate = true, limit = 6, requireCurrency = false } = {}) {
     try {
       this.onProgress(0.02, "OCRを準備しています");
       const Tesseract = await loadTesseractScript();
@@ -446,7 +449,7 @@ export class PriceTagScanner {
       }
       await this.worker.setParameters({ tessedit_pageseg_mode: pageSegMode });
       const result = await this.worker.recognize(this.canvas);
-      const candidates = extractPriceCandidates(result?.data?.text, limit, { deduplicate });
+      const candidates = extractPriceCandidates(result?.data?.text, limit, { deduplicate, requireCurrency });
       this.onProgress(1, "読取完了");
       return { candidates, text: result?.data?.text ?? "" };
     } catch (error) {

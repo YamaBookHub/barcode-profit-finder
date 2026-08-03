@@ -3,11 +3,13 @@ import assert from "node:assert/strict";
 
 import {
   DEFAULT_SETTINGS,
+  MARKETPLACES,
   buildSearchUrls,
   calculateMarketStats,
   calculateProfit,
   calculateTurnover,
   judgePurchase,
+  normalizeMarketplace,
 } from "../calculator.js";
 import {
   CAMERA_CONSTRAINT_ATTEMPTS,
@@ -102,6 +104,14 @@ test("商品名があればJANコードより商品名を検索語に使う", ()
   assert.doesNotMatch(urls.mercari, /4901234567894/);
 });
 
+test("販売先ごとの手数料と検索先を安全な初期値にする", () => {
+  assert.equal(MARKETPLACES.mercari.feeRate, 10);
+  assert.equal(MARKETPLACES.mercari.searchKey, "mercariSold");
+  assert.equal(MARKETPLACES.yahooFlea.feeRate, 5);
+  assert.equal(MARKETPLACES.amazon.feeRate, null);
+  assert.equal(normalizeMarketplace("unknown"), "mercari");
+});
+
 test("重複コードを3秒間抑止し、値札の金額候補を抽出する", () => {
   const guard = new DuplicateGuard(3000);
   assert.equal(guard.isDuplicate("490", 1000), false);
@@ -111,6 +121,10 @@ test("重複コードを3秒間抑止し、値札の金額候補を抽出する"
   assert.deepEqual(
     extractPriceCandidates("￥3,980 ￥3,980 ￥4,200", 5, { deduplicate: false }),
     [3980, 3980, 4200],
+  );
+  assert.deepEqual(
+    extractPriceCandidates("2026 08 04 12件 ￥3,980 50% 4,200円", 5, { deduplicate: false, requireCurrency: true }),
+    [3980, 4200],
   );
 });
 
@@ -191,6 +205,9 @@ test("商品・設定の保存、JSON復元、CSVエスケープが機能する"
   };
   assert.equal(repository.saveItems([item]), true);
   assert.equal(repository.loadItems()[0].barcode, "490");
+  assert.equal(repository.loadItems()[0].shippingConfirmed, false);
+  assert.equal(repository.saveItems([{ ...item, shipping: 0, shippingConfirmed: true }]), true);
+  assert.equal(repository.loadItems()[0].shippingConfirmed, true);
   const backup = repository.createBackup([item], DEFAULT_SETTINGS);
   assert.equal(repository.parseBackup(backup).items.length, 1);
   assert.equal(csvEscape('A,"B"'), '"A,""B"""');
@@ -205,12 +222,14 @@ test("検索画面へ移動する前の入力途中データを保存・復元�
     purchasePrice: "1200",
     salePrice: "3500",
     marketPrices: ["3000", "3500", "4000", "", ""],
+    marketplace: "mercari",
+    shippingConfirmed: true,
     note: "棚の上段",
     marketSearchPending: true,
   };
   assert.equal(repository.saveDraft(draft), true);
   assert.deepEqual(
-    Object.fromEntries(Object.entries(repository.loadDraft()).filter(([key]) => ["barcode", "productName", "purchasePrice", "salePrice", "marketPrices", "note", "marketSearchPending"].includes(key))),
+    Object.fromEntries(Object.entries(repository.loadDraft()).filter(([key]) => ["barcode", "productName", "purchasePrice", "salePrice", "marketPrices", "marketplace", "shippingConfirmed", "note", "marketSearchPending"].includes(key))),
     draft,
   );
   assert.equal(repository.clearDraft(), true);

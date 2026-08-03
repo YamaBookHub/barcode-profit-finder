@@ -1,4 +1,10 @@
-import { DEFAULT_SETTINGS, normalizeSettings, toFiniteNumber, toNonNegative } from "./calculator.js";
+import {
+  DEFAULT_SETTINGS,
+  normalizeMarketplace,
+  normalizeSettings,
+  toFiniteNumber,
+  toNonNegative,
+} from "./calculator.js";
 
 export const STORAGE_KEYS = Object.freeze({
   items: "barcodeProfitFinder.items.v2",
@@ -11,7 +17,7 @@ export const STORAGE_KEYS = Object.freeze({
 
 const ITEM_STRING_FIELDS = [
   "id", "productName", "barcode", "verdict", "verdictLabel", "storeName", "note",
-  "savedAt", "updatedAt", "productSearchUrl", "recentSaleDate", "checkedDate",
+  "savedAt", "updatedAt", "productSearchUrl", "recentSaleDate", "checkedDate", "marketplace",
 ];
 
 const ITEM_NUMBER_FIELDS = [
@@ -22,7 +28,7 @@ const ITEM_NUMBER_FIELDS = [
 const DRAFT_STRING_FIELDS = [
   "editingId", "barcode", "productName", "purchasePrice", "salePrice", "feeRate",
   "shipping", "packaging", "otherCosts", "storeName", "note", "soldCount",
-  "activeCount", "recentSaleDate", "checkedDate", "updatedAt",
+  "activeCount", "recentSaleDate", "checkedDate", "updatedAt", "marketplace",
 ];
 
 function safeString(value, maxLength = 5000) {
@@ -47,6 +53,10 @@ export function normalizeStoredItem(item = {}) {
     ? null
     : toFiniteNumber(item.turnoverScore, 0);
   normalized.turnoverLabel = safeString(item.turnoverLabel, 100);
+  normalized.marketplace = normalizeMarketplace(item.marketplace);
+  // 旧データの送料0円は「確認済み」か既定値か判別できないため、
+  // 明示的にtrueで保存された商品だけを確認済みとして扱う。
+  normalized.shippingConfirmed = item.shippingConfirmed === true;
   return normalized;
 }
 
@@ -62,6 +72,9 @@ export function normalizeDraft(draft = {}) {
     : [];
   normalized.salePriceIsAutomatic = Boolean(draft.salePriceIsAutomatic);
   normalized.marketSearchPending = Boolean(draft.marketSearchPending);
+  normalized.marketplace = normalizeMarketplace(draft.marketplace);
+  normalized.shippingConfirmed = Boolean(draft.shippingConfirmed);
+  normalized.marketPricesNeedConfirmation = Boolean(draft.marketPricesNeedConfirmation);
   return normalized;
 }
 
@@ -197,7 +210,7 @@ export function csvEscape(value) {
 
 export function itemsToCsv(items) {
   const headers = [
-    "商品名", "JANコード", "仕入価格", "想定売価", "販売手数料率", "販売手数料",
+    "商品名", "JANコード", "販売先", "仕入価格", "想定売価", "販売手数料率", "販売手数料",
     "送料", "梱包費", "その他経費", "手取り額", "利益", "利益率", "ROI", "判定",
     "店舗名", "メモ", "販売済み件数", "現在出品数", "回転スコア", "回転判定",
     "直近売却日", "相場確認日", "商品検索URL", "登録日時", "更新日時",
@@ -205,6 +218,7 @@ export function itemsToCsv(items) {
   const rows = items.map((item) => [
     item.productName,
     item.barcode,
+    item.marketplace,
     item.purchasePrice,
     item.salePrice,
     item.feeRate,

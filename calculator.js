@@ -15,6 +15,19 @@ export const VERDICTS = Object.freeze({
   skip: { label: "見送り", display: "🔴 見送り", tone: "skip" },
 });
 
+export const MARKETPLACES = Object.freeze({
+  mercari: Object.freeze({ label: "メルカリ", feeRate: 10, searchKey: "mercariSold", searchLabel: "メルカリ売り切れ検索" }),
+  yahooFlea: Object.freeze({ label: "Yahoo!フリマ", feeRate: 5, searchKey: "yahooFlea", searchLabel: "Yahoo!フリマ検索" }),
+  yahooAuction: Object.freeze({ label: "Yahoo!オークション", feeRate: 10, searchKey: "yahooAuction", searchLabel: "落札相場を検索" }),
+  amazon: Object.freeze({ label: "Amazon", feeRate: null, searchKey: "amazon", searchLabel: "Amazon商品検索" }),
+  other: Object.freeze({ label: "その他", feeRate: null, searchKey: "google", searchLabel: "Google商品検索" }),
+});
+
+export function normalizeMarketplace(value) {
+  const key = String(value ?? "");
+  return Object.hasOwn(MARKETPLACES, key) ? key : "mercari";
+}
+
 export function toFiniteNumber(value, fallback = 0) {
   const normalized = typeof value === "string" ? value.replaceAll(",", "").trim() : value;
   const number = Number(normalized);
