@@ -245,7 +245,7 @@ function normalizeOcrText(text) {
     .replace(/(\d)\s+(?=\d)/g, "$1");
 }
 
-export function extractPriceCandidates(text, limit = 6) {
+export function extractPriceCandidates(text, limit = 6, { deduplicate = true } = {}) {
   const normalized = normalizeOcrText(text);
   const matches = normalized.match(/[¥￥]?\s*\d[\d,.]{1,10}\s*円?/g) ?? [];
   const ranked = [];
@@ -255,7 +255,8 @@ export function extractPriceCandidates(text, limit = 6) {
     const digits = match.replace(/[^\d]/g, "");
     if (digits.length < 2 || digits.length > 8) return;
     const value = Number(digits);
-    if (!Number.isFinite(value) || value < 10 || value > 99_999_999 || seen.has(value)) return;
+    if (!Number.isFinite(value) || value < 10 || value > 99_999_999) return;
+    if (deduplicate && seen.has(value)) return;
     seen.add(value);
     let score = 0;
     if (/[¥￥円]/.test(match)) score += 4;
@@ -296,6 +297,42 @@ function preprocessFrame(video, canvas) {
     image.data[index + 2] = contrasted;
   }
   context.putImageData(image, 0, 0);
+}
+
+function preprocessImageSource(source, canvas) {
+  const sourceWidth = source.width || source.naturalWidth;
+  const sourceHeight = source.height || source.naturalHeight;
+  if (!sourceWidth || !sourceHeight) throw new Error("画像を読み込めませんでした。");
+  const scale = Math.min(1, 1800 / sourceWidth, 2200 / sourceHeight);
+  const outputWidth = Math.max(1, Math.round(sourceWidth * scale));
+  const outputHeight = Math.max(1, Math.round(sourceHeight * scale));
+  canvas.width = outputWidth;
+  canvas.height = outputHeight;
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  context.drawImage(source, 0, 0, outputWidth, outputHeight);
+  const image = context.getImageData(0, 0, outputWidth, outputHeight);
+  for (let index = 0; index < image.data.length; index += 4) {
+    const gray = image.data[index] * 0.299 + image.data[index + 1] * 0.587 + image.data[index + 2] * 0.114;
+    const contrasted = Math.max(0, Math.min(255, (gray - 128) * 1.35 + 128));
+    image.data[index] = contrasted;
+    image.data[index + 1] = contrasted;
+    image.data[index + 2] = contrasted;
+  }
+  context.putImageData(image, 0, 0);
+}
+
+async function loadImageFile(file) {
+  if (globalThis.createImageBitmap) return createImageBitmap(file);
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const image = new Image();
+    image.src = objectUrl;
+    await image.decode();
+    return image;
+  } catch {
+    URL.revokeObjectURL(objectUrl);
+    throw new Error("画像を読み込めませんでした。");
+  }
 }
 
 function loadTesseractScript() {
@@ -367,6 +404,31 @@ export class PriceTagScanner {
     try {
       preprocessFrame(this.video, this.canvas);
       this.stop("画像を端末内で解析しています…");
+      return await this.recognizeCanvas({ pageSegMode: "6", deduplicate: true });
+    } catch (error) {
+      this.onError(error?.message || "値札を読み取れませんでした。仕入価格を手入力してください。");
+      return { candidates: [], text: "" };
+    }
+  }
+
+  async recognizeImage(file) {
+    this.onError("");
+    let source;
+    try {
+      source = await loadImageFile(file);
+      preprocessImageSource(source, this.canvas);
+      return await this.recognizeCanvas({ pageSegMode: "11", deduplicate: false, limit: 5 });
+    } catch (error) {
+      this.onError(error?.message || "相場画像を読み取れませんでした。別の画像を選ぶか、価格を手入力してください。");
+      return { candidates: [], text: "" };
+    } finally {
+      if (typeof source?.close === "function") source.close();
+      if (source instanceof HTMLImageElement && source.src.startsWith("blob:")) URL.revokeObjectURL(source.src);
+    }
+  }
+
+  async recognizeCanvas({ pageSegMode = "6", deduplicate = true, limit = 6 } = {}) {
+    try {
       this.onProgress(0.02, "OCRを準備しています");
       const Tesseract = await loadTesseractScript();
       if (!this.worker) {
@@ -379,16 +441,16 @@ export class PriceTagScanner {
         });
         await this.worker.setParameters({
           tessedit_char_whitelist: "0123456789,.¥￥円",
-          tessedit_pageseg_mode: "6",
           preserve_interword_spaces: "1",
         });
       }
+      await this.worker.setParameters({ tessedit_pageseg_mode: pageSegMode });
       const result = await this.worker.recognize(this.canvas);
-      const candidates = extractPriceCandidates(result?.data?.text);
+      const candidates = extractPriceCandidates(result?.data?.text, limit, { deduplicate });
       this.onProgress(1, "読取完了");
       return { candidates, text: result?.data?.text ?? "" };
     } catch (error) {
-      this.onError(error?.message || "値札を読み取れませんでした。仕入価格を手入力してください。");
+      this.onError(error?.message || "画像から価格を読み取れませんでした。");
       return { candidates: [], text: "" };
     }
   }

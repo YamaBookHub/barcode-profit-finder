@@ -118,23 +118,6 @@ export function calculateMarketStats(values = []) {
   };
 }
 
-export function extractMarketPrices(text, limit = 5) {
-  const normalized = String(text ?? "")
-    .replace(/[０-９]/g, (digit) => String(digit.charCodeAt(0) - 0xff10))
-    .replaceAll("，", ",")
-    .replaceAll("￥", "¥");
-  const maximum = Math.max(1, Math.min(20, Math.trunc(Number(limit)) || 5));
-  const currencyMatches = [...normalized.matchAll(/¥\s*([0-9][0-9,]*)|([0-9][0-9,]*)\s*円/g)];
-  const tokens = currencyMatches.length > 0
-    ? currencyMatches.map((match) => match[1] || match[2])
-    : (normalized.match(/[0-9][0-9,]*/g) ?? []);
-
-  return tokens
-    .map((token) => Number(token.replaceAll(",", "")))
-    .filter((price) => Number.isFinite(price) && price > 0 && price <= 99_999_999)
-    .slice(0, maximum);
-}
-
 function parseDate(value) {
   if (!value) return null;
   const date = new Date(`${value}T00:00:00`);

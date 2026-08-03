@@ -13,9 +13,9 @@
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
-    <link rel="stylesheet" href="style.css?v=6">
+    <link rel="stylesheet" href="style.css?v=7">
     <script src="vendor/zxing-browser.min.js" defer></script>
-    <script type="module" src="app.js?v=6"></script>
+    <script type="module" src="app.js?v=7"></script>
   </head>
   <body>
     <a class="skip-link" href="#main">本文へ移動</a>
@@ -95,7 +95,7 @@
             <li>ほかのカメラアプリを閉じ、Safariを再起動します。</li>
           </ol>
           <button id="copyAppUrlButton" class="secondary-button" type="button">公開URLをコピー</button>
-          <a class="diagnostic-link" href="camera-test.html?v=6">カメラ端末診断を開く</a>
+          <a class="diagnostic-link" href="camera-test.html?v=7">カメラ端末診断を開く</a>
         </details>
         <div class="camera-controls">
           <button id="startScanButton" class="primary-button" type="button">カメラを開始</button>
@@ -185,31 +185,46 @@
       <section id="market-section" class="card" aria-labelledby="marketHeading">
         <div class="section-heading">
           <p class="step-label"><span>4</span> 売却相場</p>
-          <h2 id="marketHeading">売れた価格をまとめて取込</h2>
-          <p>検索結果から価格をコピーすると、最大5件と中央値を自動反映します。</p>
+          <h2 id="marketHeading">相場を自動入力</h2>
+          <p>過去に調べたJANは自動復元。初回は検索結果のスクリーンショットから価格を読み取れます。</p>
         </div>
-        <div class="market-import-panel">
-          <button id="pasteMarketPricesButton" class="primary-button market-paste-button" type="button">コピーした価格をまとめて読込</button>
-          <p id="marketImportStatus" class="inline-hint" role="status">価格の改行・空白・カンマ・円記号を自動判定します。</p>
-          <details class="market-paste-fallback">
-            <summary>長押しで貼り付ける／直接入力する</summary>
-            <label class="field-block" for="marketBulkInput">
-              <span>価格をまとめて貼り付け</span>
-              <textarea id="marketBulkInput" rows="3" inputmode="text" placeholder="例：￥3,980  4,200円  3,500円"></textarea>
+        <button id="marketScreenshotButton" class="market-screenshot-button" type="button">
+          <span aria-hidden="true">▣</span>
+          <span>相場画面のスクショを読み取る<small>画像は端末内だけで解析</small></span>
+        </button>
+        <input id="marketScreenshotInput" type="file" accept="image/*" hidden>
+        <canvas id="marketOcrCanvas" width="1" height="1" hidden></canvas>
+        <progress id="marketOcrProgress" class="ocr-progress" max="1" value="0" hidden></progress>
+        <p id="marketOcrStatus" class="status-message" role="status">メルカリ等の検索結果をスクリーンショットし、このボタンから選びます。</p>
+        <button id="openMarketPriceButton" class="market-add-button" type="button">
+          <span><b aria-hidden="true">＋</b> 売れた価格を追加</span>
+          <strong id="marketPriceButtonCount">0/5件</strong>
+        </button>
+        <div id="marketPriceList" class="market-price-list" aria-live="polite">
+          <p class="market-price-empty">まだ価格がありません。検索結果を見て、売れた価格を追加します。</p>
+        </div>
+        <input class="market-price-input" type="hidden" value="">
+        <input class="market-price-input" type="hidden" value="">
+        <input class="market-price-input" type="hidden" value="">
+        <input class="market-price-input" type="hidden" value="">
+        <input class="market-price-input" type="hidden" value="">
+        <dialog id="marketPriceDialog" class="price-entry-dialog" aria-labelledby="marketPriceDialogHeading">
+          <form id="marketPriceDialogForm">
+            <div class="dialog-heading">
+              <p class="step-label">売却相場</p>
+              <h3 id="marketPriceDialogHeading">売れた価格を追加</h3>
+              <p id="marketPriceDialogStatus" class="inline-hint">追加済み 0/5件。続けて入力できます。</p>
+            </div>
+            <label class="field-block price-editor-field" for="marketPriceEditor">
+              <span>売れた価格</span>
+              <span class="input-with-unit"><input id="marketPriceEditor" type="number" min="1" step="1" inputmode="numeric" placeholder="例：3980" required><span>円</span></span>
             </label>
-            <button id="applyMarketPricesButton" class="secondary-button" type="button">貼り付けた価格を反映</button>
-          </details>
-        </div>
-        <details class="manual-market-panel">
-          <summary>1件ずつ手入力・修正する</summary>
-          <div class="market-price-grid">
-            <label><span>相場 1</span><span class="input-with-unit"><input class="market-price-input" type="number" min="0" step="1" inputmode="numeric" aria-label="販売済み価格1"><span>円</span></span></label>
-            <label><span>相場 2</span><span class="input-with-unit"><input class="market-price-input" type="number" min="0" step="1" inputmode="numeric" aria-label="販売済み価格2"><span>円</span></span></label>
-            <label><span>相場 3</span><span class="input-with-unit"><input class="market-price-input" type="number" min="0" step="1" inputmode="numeric" aria-label="販売済み価格3"><span>円</span></span></label>
-            <label><span>相場 4</span><span class="input-with-unit"><input class="market-price-input" type="number" min="0" step="1" inputmode="numeric" aria-label="販売済み価格4"><span>円</span></span></label>
-            <label><span>相場 5</span><span class="input-with-unit"><input class="market-price-input" type="number" min="0" step="1" inputmode="numeric" aria-label="販売済み価格5"><span>円</span></span></label>
-          </div>
-        </details>
+            <div class="dialog-actions">
+              <button id="finishMarketPriceButton" class="secondary-button" type="button">完了</button>
+              <button id="applyMarketPriceButton" class="primary-button" type="submit">追加して次へ</button>
+            </div>
+          </form>
+        </dialog>
         <dl class="market-stats">
           <div class="primary-stat"><dt>中央値</dt><dd id="medianResult">―</dd></div>
           <div><dt>平均値</dt><dd id="averageResult">―</dd></div>
@@ -320,7 +335,7 @@
 
     <footer class="app-footer">
       <p>Barcode Profit Finder</p>
-      <p>相場まとめ入力 v6</p>
+      <p>スマホ価格入力 v7</p>
       <p>最終判断は商品の状態、需要、各サイトの規約も確認してください。</p>
     </footer>
     <noscript>このアプリを使うにはJavaScriptを有効にしてください。</noscript>

@@ -1,14 +1,14 @@
-const CACHE_NAME = "barcode-profit-finder-v6";
+const CACHE_NAME = "barcode-profit-finder-v7";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./style.css?v=6",
-  "./app.js?v=6",
-  "./calculator.js?v=6",
-  "./scanner.js?v=6",
-  "./storage.js?v=6",
-  "./camera-test.html?v=6",
-  "./camera-test.js?v=6",
+  "./style.css?v=7",
+  "./app.js?v=7",
+  "./calculator.js?v=7",
+  "./scanner.js?v=7",
+  "./storage.js?v=7",
+  "./camera-test.html?v=7",
+  "./camera-test.js?v=7",
   "./manifest.json",
   "./icons/icon.svg",
   "./icons/apple-touch-icon.png",

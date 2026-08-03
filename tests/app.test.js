@@ -7,7 +7,6 @@ import {
   calculateMarketStats,
   calculateProfit,
   calculateTurnover,
-  extractMarketPrices,
   judgePurchase,
 } from "../calculator.js";
 import {
@@ -68,14 +67,6 @@ test("最大5件の相場から中央値・平均・最安・最高を計算す�
   });
 });
 
-test("コピーした価格テキストから最大5件をまとめて抽出する", () => {
-  assert.deepEqual(
-    extractMarketPrices("商品名 13型\n￥3,980\n4,200円\n￥３，５００\n￥3,980\n送料750", 5),
-    [3980, 4200, 3500, 3980],
-  );
-  assert.deepEqual(extractMarketPrices("3980 4200 3500 4800 5100 9999"), [3980, 4200, 3500, 4800, 5100]);
-});
-
 test("販売済み件数と現在出品数から回転スコアを返す", () => {
   assert.equal(calculateTurnover({ soldCount: 10, activeCount: 5 }).key, "fast");
   assert.equal(calculateTurnover({ soldCount: 2, activeCount: 5 }).key, "normal");
@@ -99,6 +90,10 @@ test("重複コードを3秒間抑止し、値札の金額候補を抽出する"
   assert.equal(guard.isDuplicate("490", 2500), true);
   assert.equal(guard.isDuplicate("490", 4100), false);
   assert.deepEqual(extractPriceCandidates("特価 ￥1,980 税込 2980円"), [1980, 2980]);
+  assert.deepEqual(
+    extractPriceCandidates("￥3,980 ￥3,980 ￥4,200", 5, { deduplicate: false }),
+    [3980, 3980, 4200],
+  );
 });
 
 test("カメラ権限拒否時にSafariの対処方法を日本語で返す", () => {

@@ -5,13 +5,12 @@ import {
   calculateMarketStats,
   calculateProfit,
   calculateTurnover,
-  extractMarketPrices,
   judgePurchase,
   normalizeSettings,
   toNonNegative,
-} from "./calculator.js?v=6";
-import { BarcodeScanner, PriceTagScanner, normalizeBarcode } from "./scanner.js?v=6";
-import { StorageRepository, itemsToCsv } from "./storage.js?v=6";
+} from "./calculator.js?v=7";
+import { BarcodeScanner, PriceTagScanner, normalizeBarcode } from "./scanner.js?v=7";
+import { StorageRepository, itemsToCsv } from "./storage.js?v=7";
 
 const byId = (id) => document.getElementById(id);
 const elements = {
@@ -64,11 +63,21 @@ const elements = {
   storeNameInput: byId("storeNameInput"),
   productNameInput: byId("productNameInput"),
   searchHint: byId("searchHint"),
-  marketBulkInput: byId("marketBulkInput"),
-  pasteMarketPricesButton: byId("pasteMarketPricesButton"),
-  applyMarketPricesButton: byId("applyMarketPricesButton"),
-  marketImportStatus: byId("marketImportStatus"),
-  marketPasteFallback: document.querySelector(".market-paste-fallback"),
+  marketScreenshotButton: byId("marketScreenshotButton"),
+  marketScreenshotInput: byId("marketScreenshotInput"),
+  marketOcrCanvas: byId("marketOcrCanvas"),
+  marketOcrProgress: byId("marketOcrProgress"),
+  marketOcrStatus: byId("marketOcrStatus"),
+  openMarketPriceButton: byId("openMarketPriceButton"),
+  marketPriceButtonCount: byId("marketPriceButtonCount"),
+  marketPriceList: byId("marketPriceList"),
+  marketPriceDialog: byId("marketPriceDialog"),
+  marketPriceDialogForm: byId("marketPriceDialogForm"),
+  marketPriceDialogHeading: byId("marketPriceDialogHeading"),
+  marketPriceDialogStatus: byId("marketPriceDialogStatus"),
+  marketPriceEditor: byId("marketPriceEditor"),
+  finishMarketPriceButton: byId("finishMarketPriceButton"),
+  applyMarketPriceButton: byId("applyMarketPriceButton"),
   marketPriceInputs: [...document.querySelectorAll(".market-price-input")],
   medianResult: byId("medianResult"),
   averageResult: byId("averageResult"),
@@ -131,6 +140,8 @@ let currentSearchUrls = buildSearchUrls("");
 let editingId = null;
 let salePriceIsAutomatic = true;
 let highProfitNotified = false;
+let editingMarketPriceIndex = null;
+let lastRestoredBarcode = "";
 let tutorialStep = 0;
 let toastTimer = 0;
 let waitingWorker = null;
@@ -227,6 +238,7 @@ function renderMarketStats({ updateSalePrice = true } = {}) {
   elements.minimumResult.textContent = formatCurrency(stats.min);
   elements.maximumResult.textContent = formatCurrency(stats.max);
   elements.marketCountResult.textContent = `${stats.count}件`;
+  renderMarketPriceList();
   if (updateSalePrice && salePriceIsAutomatic) {
     elements.salePriceInput.value = stats.median === null ? "" : String(Math.round(stats.median));
   }
@@ -270,36 +282,102 @@ function applyPurchasePrice() {
   return true;
 }
 
-function applyMarketPriceText(text = elements.marketBulkInput.value) {
-  const prices = extractMarketPrices(text, elements.marketPriceInputs.length);
-  if (prices.length === 0) {
-    elements.marketImportStatus.textContent = "価格を認識できませんでした。例：￥3,980 4,200円";
-    showToast("価格を認識できませんでした");
-    return false;
+function marketPriceValues() {
+  return elements.marketPriceInputs
+    .map((input) => input.value)
+    .filter((value) => value !== "");
+}
+
+function renderMarketPriceList() {
+  const values = marketPriceValues();
+  elements.marketPriceButtonCount.textContent = `${values.length}/5件`;
+  elements.openMarketPriceButton.disabled = values.length >= elements.marketPriceInputs.length;
+  elements.marketPriceList.replaceChildren();
+  if (values.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "market-price-empty";
+    empty.textContent = "まだ価格がありません。検索結果を見て、売れた価格を追加します。";
+    elements.marketPriceList.append(empty);
+    return;
   }
-  elements.marketPriceInputs.forEach((input, index) => {
-    input.value = prices[index] ?? "";
+  values.forEach((value, index) => {
+    const item = document.createElement("div");
+    item.className = "market-price-chip";
+    const editButton = document.createElement("button");
+    editButton.type = "button";
+    editButton.dataset.action = "edit-market-price";
+    editButton.dataset.index = String(index);
+    editButton.textContent = formatCurrency(toNonNegative(value));
+    editButton.setAttribute("aria-label", `${formatCurrency(toNonNegative(value))}を修正`);
+    const removeButton = document.createElement("button");
+    removeButton.type = "button";
+    removeButton.className = "market-price-remove";
+    removeButton.dataset.action = "remove-market-price";
+    removeButton.dataset.index = String(index);
+    removeButton.textContent = "×";
+    removeButton.setAttribute("aria-label", `${formatCurrency(toNonNegative(value))}を削除`);
+    item.append(editButton, removeButton);
+    elements.marketPriceList.append(item);
   });
+}
+
+function closeMarketPriceEditor() {
+  editingMarketPriceIndex = null;
+  if (typeof elements.marketPriceDialog.close === "function") elements.marketPriceDialog.close();
+  else elements.marketPriceDialog.removeAttribute("open");
+}
+
+function openMarketPriceEditor(index = null) {
+  const values = marketPriceValues();
+  if (index === null && values.length >= elements.marketPriceInputs.length) {
+    showToast("相場は最大5件です。価格をタップすると修正できます");
+    return;
+  }
+  editingMarketPriceIndex = index;
+  const editing = index !== null;
+  elements.marketPriceDialogHeading.textContent = editing ? "売れた価格を修正" : "売れた価格を追加";
+  elements.marketPriceDialogStatus.textContent = editing
+    ? `${index + 1}件目を修正します`
+    : `追加済み ${values.length}/5件。続けて入力できます。`;
+  elements.applyMarketPriceButton.textContent = editing ? "変更する" : "追加して次へ";
+  elements.marketPriceEditor.value = editing ? values[index] : "";
+  if (typeof elements.marketPriceDialog.showModal === "function") elements.marketPriceDialog.showModal();
+  else elements.marketPriceDialog.setAttribute("open", "");
+  window.setTimeout(() => {
+    elements.marketPriceEditor.focus();
+    elements.marketPriceEditor.select();
+  }, 50);
+}
+
+function applyMarketPrice() {
+  if (!elements.marketPriceEditor.reportValidity()) return false;
+  const value = String(Math.round(toNonNegative(elements.marketPriceEditor.value)));
+  const values = marketPriceValues();
+  if (editingMarketPriceIndex === null) values.push(value);
+  else values[editingMarketPriceIndex] = value;
+  elements.marketPriceInputs.forEach((input, index) => { input.value = values[index] ?? ""; });
   salePriceIsAutomatic = true;
-  const stats = renderMarketStats();
-  elements.marketImportStatus.textContent = `${stats.count}件を取込み、中央値${formatCurrency(stats.median)}を想定売価に反映しました。`;
-  showToast(`${stats.count}件の相場を取り込みました`);
+  const wasEditing = editingMarketPriceIndex !== null;
+  renderMarketStats();
+  if (navigator.vibrate) navigator.vibrate(25);
+  if (wasEditing || values.length >= elements.marketPriceInputs.length) {
+    closeMarketPriceEditor();
+    showToast(wasEditing ? "相場価格を変更しました" : "5件の相場を追加しました");
+  } else {
+    elements.marketPriceEditor.value = "";
+    elements.marketPriceDialogStatus.textContent = `追加済み ${values.length}/5件。続けて入力できます。`;
+    elements.marketPriceEditor.focus();
+  }
   return true;
 }
 
-async function pasteMarketPrices() {
-  try {
-    if (!navigator.clipboard?.readText) throw new Error("Clipboard API unavailable");
-    const text = await navigator.clipboard.readText();
-    if (!text.trim()) throw new Error("Clipboard is empty");
-    elements.marketBulkInput.value = text;
-    applyMarketPriceText(text);
-  } catch {
-    elements.marketPasteFallback.open = true;
-    elements.marketBulkInput.focus();
-    elements.marketImportStatus.textContent = "入力欄を長押しして「ペースト」を選びます。貼り付けると自動反映されます。";
-    showToast("入力欄を長押しして貼り付けてください", 3600);
-  }
+function removeMarketPrice(index) {
+  const values = marketPriceValues();
+  values.splice(index, 1);
+  elements.marketPriceInputs.forEach((input, inputIndex) => { input.value = values[inputIndex] ?? ""; });
+  salePriceIsAutomatic = true;
+  renderMarketStats();
+  showToast("相場価格を削除しました");
 }
 
 function renderTurnover() {
@@ -330,6 +408,38 @@ function updateSearchLinks() {
     : "先にJANコードまたは商品名を入力してください。";
 }
 
+function restoreSavedMarket(code) {
+  const normalized = normalizeBarcode(code);
+  if (!normalized || normalized === lastRestoredBarcode || editingId) return false;
+  const previous = items.find((item) => (
+    normalizeBarcode(item.barcode) === normalized
+    && ((item.marketPrices?.length ?? 0) > 0 || toNonNegative(item.salePrice) > 0)
+  ));
+  if (!previous) return false;
+  lastRestoredBarcode = normalized;
+  if (!elements.productNameInput.value && previous.productName) elements.productNameInput.value = previous.productName;
+  elements.feeRateInput.value = previous.feeRate ?? elements.feeRateInput.value;
+  elements.shippingInput.value = previous.shipping ?? elements.shippingInput.value;
+  elements.packagingInput.value = previous.packaging ?? elements.packagingInput.value;
+  elements.otherCostsInput.value = previous.otherCosts ?? elements.otherCostsInput.value;
+  const previousPrices = previous.marketPrices ?? [];
+  elements.marketPriceInputs.forEach((input, index) => { input.value = previousPrices[index] ?? ""; });
+  if (previousPrices.length > 0) {
+    salePriceIsAutomatic = true;
+    renderMarketStats();
+  } else {
+    salePriceIsAutomatic = false;
+    elements.salePriceInput.value = String(previous.salePrice);
+    renderMarketStats({ updateSalePrice: false });
+  }
+  updateSearchLinks();
+  const savedAt = new Date(previous.updatedAt || previous.savedAt);
+  const savedLabel = Number.isNaN(savedAt.getTime()) ? "保存済み" : dateTimeFormatter.format(savedAt);
+  setMessage(elements.marketOcrStatus, `${savedLabel}の相場を復元しました。現在の相場と大きく違わないか確認してください。`);
+  showToast("このJANの過去相場を自動で復元しました", 3600);
+  return true;
+}
+
 function setScannerState(scanning) {
   elements.cameraFrame.classList.toggle("is-scanning", scanning);
   elements.startScanButton.disabled = scanning;
@@ -344,6 +454,7 @@ const barcodeScanner = new BarcodeScanner({
   onSuccess: (code) => {
     elements.barcodeInput.value = code;
     updateSearchLinks();
+    restoreSavedMarket(code);
     elements.scanSuccess.hidden = false;
     window.setTimeout(() => { elements.scanSuccess.hidden = true; }, 900);
     showToast(`バーコード ${code} を読み取りました`);
@@ -369,6 +480,39 @@ const priceScanner = new PriceTagScanner({
     setMessage(elements.priceCameraStatus, `${label} ${Math.round(progress * 100)}%`);
   },
 });
+
+const marketImageReader = new PriceTagScanner({
+  canvas: elements.marketOcrCanvas,
+  onStatus: (message) => setMessage(elements.marketOcrStatus, message),
+  onError: (message) => setMessage(elements.marketOcrStatus, message),
+  onProgress: (progress, label) => {
+    elements.marketOcrProgress.hidden = false;
+    elements.marketOcrProgress.value = progress;
+    setMessage(elements.marketOcrStatus, `${label} ${Math.round(progress * 100)}%`);
+  },
+});
+
+async function readMarketScreenshot(file) {
+  barcodeScanner.stop("相場画像の解析中です");
+  priceScanner.stop();
+  elements.marketScreenshotButton.disabled = true;
+  elements.marketOcrProgress.hidden = false;
+  setMessage(elements.marketOcrStatus, "スクリーンショットを端末内で解析しています…");
+  const result = await marketImageReader.recognizeImage(file);
+  elements.marketScreenshotButton.disabled = false;
+  elements.marketOcrProgress.hidden = true;
+  if (result.candidates.length === 0) {
+    setMessage(elements.marketOcrStatus, "価格を見つけられませんでした。価格が大きく表示されたスクリーンショットを選んでください。");
+    return;
+  }
+  elements.marketPriceInputs.forEach((input, index) => {
+    input.value = result.candidates[index] ?? "";
+  });
+  salePriceIsAutomatic = true;
+  const stats = renderMarketStats();
+  setMessage(elements.marketOcrStatus, `${stats.count}件を読み取りました。金額を確認し、違う候補は×で削除してください。`);
+  showToast(`相場${stats.count}件と中央値を自動入力しました`, 3600);
+}
 
 function openPriceScanner() {
   barcodeScanner.stop("値札読取のためバーコードカメラを停止しました");
@@ -488,8 +632,7 @@ function clearProductForm() {
   elements.purchasePriceInput.value = "";
   syncPurchasePriceDisplay();
   elements.salePriceInput.value = "";
-  elements.marketBulkInput.value = "";
-  elements.marketImportStatus.textContent = "価格の改行・空白・カンマ・円記号を自動判定します。";
+  lastRestoredBarcode = "";
   elements.marketPriceInputs.forEach((input) => { input.value = ""; });
   elements.soldCountInput.value = "";
   elements.activeCountInput.value = "";
@@ -549,8 +692,6 @@ function fillItemForm(item) {
   elements.storeNameInput.value = item.storeName;
   elements.noteInput.value = item.note;
   elements.marketPriceInputs.forEach((input, index) => { input.value = item.marketPrices?.[index] ?? ""; });
-  elements.marketBulkInput.value = "";
-  elements.marketImportStatus.textContent = "保存済みの相場を読み込みました。必要なら手入力欄で修正できます。";
   elements.soldCountInput.value = item.soldCount ?? "";
   elements.activeCountInput.value = item.activeCount ?? "";
   elements.recentSaleDateInput.value = item.recentSaleDate || "";
@@ -665,6 +806,7 @@ function registerEvents() {
   elements.stopScanButton.addEventListener("click", () => barcodeScanner.stop());
   elements.rescanButton.addEventListener("click", async () => {
     elements.barcodeInput.value = "";
+    lastRestoredBarcode = "";
     updateSearchLinks();
     barcodeScanner.allowImmediateRescan();
     await barcodeScanner.start();
@@ -672,6 +814,7 @@ function registerEvents() {
   elements.barcodeInput.addEventListener("input", () => {
     elements.barcodeInput.value = normalizeBarcode(elements.barcodeInput.value);
     updateSearchLinks();
+    restoreSavedMarket(elements.barcodeInput.value);
   });
   elements.productNameInput.addEventListener("input", updateSearchLinks);
   document.querySelectorAll("[data-search]").forEach((link) => {
@@ -701,12 +844,25 @@ function registerEvents() {
     event.preventDefault();
     applyPurchasePrice();
   });
-  elements.pasteMarketPricesButton.addEventListener("click", pasteMarketPrices);
-  elements.applyMarketPricesButton.addEventListener("click", () => applyMarketPriceText());
-  elements.marketBulkInput.addEventListener("paste", () => {
-    window.setTimeout(() => applyMarketPriceText(), 0);
+  elements.marketScreenshotButton.addEventListener("click", () => elements.marketScreenshotInput.click());
+  elements.marketScreenshotInput.addEventListener("change", async () => {
+    const file = elements.marketScreenshotInput.files?.[0];
+    elements.marketScreenshotInput.value = "";
+    if (file) await readMarketScreenshot(file);
   });
-  elements.marketPriceInputs.forEach((input) => input.addEventListener("input", () => renderMarketStats()));
+  elements.openMarketPriceButton.addEventListener("click", () => openMarketPriceEditor());
+  elements.finishMarketPriceButton.addEventListener("click", closeMarketPriceEditor);
+  elements.marketPriceDialogForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    applyMarketPrice();
+  });
+  elements.marketPriceList.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-action]");
+    if (!button) return;
+    const index = Number(button.dataset.index);
+    if (button.dataset.action === "edit-market-price") openMarketPriceEditor(index);
+    else if (button.dataset.action === "remove-market-price") removeMarketPrice(index);
+  });
   elements.salePriceInput.addEventListener("input", () => {
     salePriceIsAutomatic = false;
     renderCalculation();
@@ -795,6 +951,7 @@ function registerEvents() {
   window.addEventListener("pagehide", () => {
     barcodeScanner.stop();
     priceScanner.terminate();
+    marketImageReader.terminate();
   });
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) {
