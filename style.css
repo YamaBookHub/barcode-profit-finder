@@ -1414,7 +1414,13 @@ input[data-screen-number] {
 }
 
 .turnover-fields {
+  grid-template-columns: 1fr;
   margin-top: 0.8rem;
+}
+
+.turnover-fields input[type="date"] {
+  min-height: 56px;
+  font-size: 1.05rem;
 }
 
 .turnover-result {
@@ -1608,6 +1614,10 @@ body.has-modal {
 
   .camera-controls .primary-button {
     grid-column: auto;
+  }
+
+  .turnover-fields {
+    grid-template-columns: 1fr 1fr;
   }
 }
 

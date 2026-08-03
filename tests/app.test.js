@@ -73,6 +73,16 @@ test("販売済み件数と現在出品数から回転スコアを返す", () =>
   assert.equal(calculateTurnover({ soldCount: 2, activeCount: 5 }).key, "normal");
   assert.equal(calculateTurnover({ soldCount: 1, activeCount: 10 }).key, "slow");
   assert.equal(calculateTurnover({ soldCount: "", activeCount: "" }).key, "insufficient");
+  assert.equal(calculateTurnover({
+    soldCount: 1,
+    activeCount: 1,
+    recentSaleDate: "2026-03-07",
+    checkedDate: "2026-03-09",
+  }).daysSinceSale, 2);
+  assert.equal(calculateTurnover({
+    recentSaleDate: "2026-08-04",
+    checkedDate: "2026-08-03",
+  }).daysSinceSale, 0);
 });
 
 test("検索URLにバーコードを埋め込みAmazonを含める", () => {

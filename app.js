@@ -8,11 +8,11 @@ import {
   judgePurchase,
   normalizeSettings,
   toNonNegative,
-} from "./calculator.js?v=12";
-import { BarcodeScanner, PriceTagScanner, normalizeBarcode } from "./scanner.js?v=12";
-import { StorageRepository, itemsToCsv } from "./storage.js?v=12";
-import { isBookIsbn, lookupBookByIsbn } from "./product-lookup.js?v=12";
-import { parseSpokenNumber, speechErrorMessage, speechRecognitionConstructor } from "./voice-input.js?v=12";
+} from "./calculator.js?v=13";
+import { BarcodeScanner, PriceTagScanner, normalizeBarcode } from "./scanner.js?v=13";
+import { StorageRepository, itemsToCsv } from "./storage.js?v=13";
+import { isBookIsbn, lookupBookByIsbn } from "./product-lookup.js?v=13";
+import { parseSpokenNumber, speechErrorMessage, speechRecognitionConstructor } from "./voice-input.js?v=13";
 
 const byId = (id) => document.getElementById(id);
 const elements = {

@@ -118,10 +118,24 @@ export function calculateMarketStats(values = []) {
   };
 }
 
-function parseDate(value) {
-  if (!value) return null;
-  const date = new Date(`${value}T00:00:00`);
-  return Number.isNaN(date.getTime()) ? null : date;
+function parseCalendarDay(value) {
+  const match = String(value ?? "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const timestamp = Date.UTC(year, month - 1, day);
+  const parsed = new Date(timestamp);
+  if (
+    parsed.getUTCFullYear() !== year
+    || parsed.getUTCMonth() !== month - 1
+    || parsed.getUTCDate() !== day
+  ) return null;
+  return Math.floor(timestamp / 86400000);
+}
+
+function localCalendarDay(date = new Date()) {
+  return Math.floor(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86400000);
 }
 
 export function calculateTurnover(values = {}) {
@@ -129,10 +143,10 @@ export function calculateTurnover(values = {}) {
   const hasActive = values.activeCount !== "" && values.activeCount !== null && values.activeCount !== undefined;
   const soldCount = toNonNegative(values.soldCount);
   const activeCount = toNonNegative(values.activeCount);
-  const recentSaleDate = parseDate(values.recentSaleDate);
-  const checkedDate = parseDate(values.checkedDate) ?? new Date();
-  const daysSinceSale = recentSaleDate
-    ? Math.max(0, Math.floor((checkedDate.getTime() - recentSaleDate.getTime()) / 86400000))
+  const recentSaleDay = parseCalendarDay(values.recentSaleDate);
+  const checkedDay = parseCalendarDay(values.checkedDate) ?? localCalendarDay();
+  const daysSinceSale = recentSaleDay !== null
+    ? Math.max(0, checkedDay - recentSaleDay)
     : null;
 
   if (!hasSold || !hasActive || activeCount === 0) {
