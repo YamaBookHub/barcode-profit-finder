@@ -474,6 +474,58 @@ a[aria-disabled="true"] {
   width: 100%;
 }
 
+.diagnostic-link {
+  display: grid;
+  min-height: 48px;
+  margin-top: 0.55rem;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--primary-strong);
+  font-weight: 850;
+  text-align: center;
+  text-decoration: none;
+}
+
+.diagnostic-page {
+  width: min(calc(100% - 1rem), 620px);
+  margin: 0 auto;
+  padding: calc(1rem + var(--safe-top)) 0 calc(2rem + var(--safe-bottom));
+}
+
+.diagnostic-page .card + .card {
+  margin-top: 1rem;
+}
+
+.diagnostic-actions {
+  display: grid;
+  gap: 0.65rem;
+  margin-top: 0.85rem;
+}
+
+.diagnostic-video {
+  display: block;
+  width: 100%;
+  min-height: 190px;
+  border-radius: 16px;
+  background: #0f1d1b;
+  object-fit: cover;
+}
+
+.diagnostic-result {
+  overflow-x: auto;
+  margin: 0.8rem 0 0;
+  padding: 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-soft);
+  color: var(--text);
+  font: 0.78rem/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
 .camera-controls,
 .button-row,
 .save-actions {
