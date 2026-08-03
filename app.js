@@ -5,12 +5,13 @@ import {
   calculateMarketStats,
   calculateProfit,
   calculateTurnover,
+  extractMarketPrices,
   judgePurchase,
   normalizeSettings,
   toNonNegative,
-} from "./calculator.js?v=5";
-import { BarcodeScanner, PriceTagScanner, normalizeBarcode } from "./scanner.js?v=5";
-import { StorageRepository, itemsToCsv } from "./storage.js?v=5";
+} from "./calculator.js?v=6";
+import { BarcodeScanner, PriceTagScanner, normalizeBarcode } from "./scanner.js?v=6";
+import { StorageRepository, itemsToCsv } from "./storage.js?v=6";
 
 const byId = (id) => document.getElementById(id);
 const elements = {
@@ -54,9 +55,20 @@ const elements = {
   closePriceScannerButton: byId("closePriceScannerButton"),
   priceCandidates: byId("priceCandidates"),
   purchasePriceInput: byId("purchasePriceInput"),
+  openPurchasePriceButton: byId("openPurchasePriceButton"),
+  purchasePriceDisplay: byId("purchasePriceDisplay"),
+  purchasePriceDialog: byId("purchasePriceDialog"),
+  purchasePriceDialogForm: byId("purchasePriceDialogForm"),
+  purchasePriceEditor: byId("purchasePriceEditor"),
+  cancelPurchasePriceButton: byId("cancelPurchasePriceButton"),
   storeNameInput: byId("storeNameInput"),
   productNameInput: byId("productNameInput"),
   searchHint: byId("searchHint"),
+  marketBulkInput: byId("marketBulkInput"),
+  pasteMarketPricesButton: byId("pasteMarketPricesButton"),
+  applyMarketPricesButton: byId("applyMarketPricesButton"),
+  marketImportStatus: byId("marketImportStatus"),
+  marketPasteFallback: document.querySelector(".market-paste-fallback"),
   marketPriceInputs: [...document.querySelectorAll(".market-price-input")],
   medianResult: byId("medianResult"),
   averageResult: byId("averageResult"),
@@ -222,6 +234,74 @@ function renderMarketStats({ updateSalePrice = true } = {}) {
   return stats;
 }
 
+function syncPurchasePriceDisplay() {
+  const hasPrice = elements.purchasePriceInput.value !== "";
+  elements.purchasePriceDisplay.textContent = hasPrice
+    ? formatCurrency(toNonNegative(elements.purchasePriceInput.value))
+    : "未入力";
+  elements.openPurchasePriceButton.classList.toggle("has-value", hasPrice);
+}
+
+function openPurchasePriceEditor() {
+  elements.purchasePriceEditor.value = elements.purchasePriceInput.value;
+  if (typeof elements.purchasePriceDialog.showModal === "function") {
+    elements.purchasePriceDialog.showModal();
+  } else {
+    elements.purchasePriceDialog.setAttribute("open", "");
+  }
+  window.setTimeout(() => {
+    elements.purchasePriceEditor.focus();
+    elements.purchasePriceEditor.select();
+  }, 50);
+}
+
+function closePurchasePriceEditor() {
+  if (typeof elements.purchasePriceDialog.close === "function") elements.purchasePriceDialog.close();
+  else elements.purchasePriceDialog.removeAttribute("open");
+}
+
+function applyPurchasePrice() {
+  if (!elements.purchasePriceEditor.reportValidity()) return false;
+  elements.purchasePriceInput.value = String(Math.round(toNonNegative(elements.purchasePriceEditor.value)));
+  syncPurchasePriceDisplay();
+  renderCalculation();
+  closePurchasePriceEditor();
+  if (navigator.vibrate) navigator.vibrate(25);
+  return true;
+}
+
+function applyMarketPriceText(text = elements.marketBulkInput.value) {
+  const prices = extractMarketPrices(text, elements.marketPriceInputs.length);
+  if (prices.length === 0) {
+    elements.marketImportStatus.textContent = "価格を認識できませんでした。例：￥3,980 4,200円";
+    showToast("価格を認識できませんでした");
+    return false;
+  }
+  elements.marketPriceInputs.forEach((input, index) => {
+    input.value = prices[index] ?? "";
+  });
+  salePriceIsAutomatic = true;
+  const stats = renderMarketStats();
+  elements.marketImportStatus.textContent = `${stats.count}件を取込み、中央値${formatCurrency(stats.median)}を想定売価に反映しました。`;
+  showToast(`${stats.count}件の相場を取り込みました`);
+  return true;
+}
+
+async function pasteMarketPrices() {
+  try {
+    if (!navigator.clipboard?.readText) throw new Error("Clipboard API unavailable");
+    const text = await navigator.clipboard.readText();
+    if (!text.trim()) throw new Error("Clipboard is empty");
+    elements.marketBulkInput.value = text;
+    applyMarketPriceText(text);
+  } catch {
+    elements.marketPasteFallback.open = true;
+    elements.marketBulkInput.focus();
+    elements.marketImportStatus.textContent = "入力欄を長押しして「ペースト」を選びます。貼り付けると自動反映されます。";
+    showToast("入力欄を長押しして貼り付けてください", 3600);
+  }
+}
+
 function renderTurnover() {
   currentTurnover = calculateTurnover({
     soldCount: elements.soldCountInput.value,
@@ -318,6 +398,7 @@ function renderPriceCandidates(candidates) {
     button.textContent = formatCurrency(price);
     button.addEventListener("click", () => {
       elements.purchasePriceInput.value = String(price);
+      syncPurchasePriceDisplay();
       renderCalculation();
       showToast(`${formatCurrency(price)}を仕入価格に設定しました`);
       closePriceScanner();
@@ -405,7 +486,10 @@ function clearProductForm() {
   elements.barcodeInput.value = "";
   elements.productNameInput.value = "";
   elements.purchasePriceInput.value = "";
+  syncPurchasePriceDisplay();
   elements.salePriceInput.value = "";
+  elements.marketBulkInput.value = "";
+  elements.marketImportStatus.textContent = "価格の改行・空白・カンマ・円記号を自動判定します。";
   elements.marketPriceInputs.forEach((input) => { input.value = ""; });
   elements.soldCountInput.value = "";
   elements.activeCountInput.value = "";
@@ -424,9 +508,9 @@ function clearProductForm() {
 function saveCurrentItem() {
   renderCalculation();
   renderTurnover();
-  if (!elements.purchasePriceInput.reportValidity() || elements.purchasePriceInput.value === "") {
+  if (elements.purchasePriceInput.value === "") {
     showToast("仕入価格を入力してください");
-    elements.purchasePriceInput.focus();
+    openPurchasePriceEditor();
     return;
   }
   if (!elements.salePriceInput.reportValidity() || toNonNegative(elements.salePriceInput.value) <= 0) {
@@ -456,6 +540,7 @@ function fillItemForm(item) {
   elements.barcodeInput.value = item.barcode;
   elements.productNameInput.value = item.productName;
   elements.purchasePriceInput.value = item.purchasePrice ?? "";
+  syncPurchasePriceDisplay();
   elements.salePriceInput.value = item.salePrice ?? "";
   elements.feeRateInput.value = item.feeRate ?? 10;
   elements.shippingInput.value = item.shipping ?? 0;
@@ -464,6 +549,8 @@ function fillItemForm(item) {
   elements.storeNameInput.value = item.storeName;
   elements.noteInput.value = item.note;
   elements.marketPriceInputs.forEach((input, index) => { input.value = item.marketPrices?.[index] ?? ""; });
+  elements.marketBulkInput.value = "";
+  elements.marketImportStatus.textContent = "保存済みの相場を読み込みました。必要なら手入力欄で修正できます。";
   elements.soldCountInput.value = item.soldCount ?? "";
   elements.activeCountInput.value = item.activeCount ?? "";
   elements.recentSaleDateInput.value = item.recentSaleDate || "";
@@ -608,12 +695,23 @@ function registerEvents() {
   });
   elements.closePriceScannerButton.addEventListener("click", closePriceScanner);
 
+  elements.openPurchasePriceButton.addEventListener("click", openPurchasePriceEditor);
+  elements.cancelPurchasePriceButton.addEventListener("click", closePurchasePriceEditor);
+  elements.purchasePriceDialogForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    applyPurchasePrice();
+  });
+  elements.pasteMarketPricesButton.addEventListener("click", pasteMarketPrices);
+  elements.applyMarketPricesButton.addEventListener("click", () => applyMarketPriceText());
+  elements.marketBulkInput.addEventListener("paste", () => {
+    window.setTimeout(() => applyMarketPriceText(), 0);
+  });
   elements.marketPriceInputs.forEach((input) => input.addEventListener("input", () => renderMarketStats()));
   elements.salePriceInput.addEventListener("input", () => {
     salePriceIsAutomatic = false;
     renderCalculation();
   });
-  [elements.purchasePriceInput, elements.feeRateInput, elements.shippingInput,
+  [elements.feeRateInput, elements.shippingInput,
     elements.packagingInput, elements.otherCostsInput].forEach((input) => input.addEventListener("input", renderCalculation));
   [elements.soldCountInput, elements.activeCountInput, elements.recentSaleDateInput,
     elements.checkedDateInput].forEach((input) => input.addEventListener("input", renderTurnover));

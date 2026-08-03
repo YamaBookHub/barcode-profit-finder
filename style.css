@@ -940,6 +940,39 @@ textarea:focus {
   margin-top: 1rem;
 }
 
+.price-entry-button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  min-height: 72px;
+  padding: 0.85rem 1rem;
+  border: 2px solid var(--primary);
+  border-radius: 16px;
+  background: var(--primary);
+  color: var(--primary-contrast);
+  font: inherit;
+  text-align: left;
+  box-shadow: 0 7px 20px rgb(13 118 110 / 22%);
+}
+
+.price-entry-button span {
+  font-size: 1rem;
+  font-weight: 850;
+}
+
+.price-entry-button strong {
+  font-size: clamp(1.25rem, 6vw, 1.65rem);
+  font-weight: 950;
+  white-space: nowrap;
+}
+
+.price-entry-button.has-value {
+  background: var(--surface);
+  color: var(--primary-strong);
+}
+
 .scan-price-button {
   display: flex;
   align-items: center;
@@ -955,6 +988,47 @@ textarea:focus {
   font: inherit;
   font-size: 1.02rem;
   font-weight: 900;
+  margin-top: 0.65rem;
+}
+
+.price-entry-dialog {
+  width: min(calc(100% - 1.5rem), 430px);
+  max-width: none;
+  margin: auto;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-lg);
+}
+
+.price-entry-dialog::backdrop {
+  background: rgb(4 18 17 / 68%);
+  backdrop-filter: blur(3px);
+}
+
+.price-entry-dialog h3 {
+  margin: 0.15rem 0 0;
+  font-size: 1.25rem;
+}
+
+.price-editor-field {
+  margin-top: 1rem;
+}
+
+.price-editor-field input {
+  min-height: 64px;
+  font-size: 1.55rem;
+  font-weight: 900;
+  text-align: right;
+}
+
+.dialog-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  gap: 0.6rem;
+  margin-top: 1rem;
 }
 
 .price-scanner-panel {
@@ -1037,6 +1111,61 @@ textarea:focus {
   padding: 0.55rem 0.7rem;
   border-radius: 10px;
   background: var(--surface-soft);
+}
+
+.market-import-panel {
+  padding: 0.85rem;
+  border: 2px solid var(--primary);
+  border-radius: 15px;
+  background: var(--surface-soft);
+}
+
+.market-import-panel textarea {
+  min-height: 84px;
+  resize: vertical;
+}
+
+.market-paste-button {
+  width: 100%;
+  min-height: 60px;
+}
+
+.market-paste-fallback {
+  margin-top: 0.65rem;
+  border-top: 1px solid var(--line);
+}
+
+.market-paste-fallback summary {
+  padding: 0.65rem 0 0.2rem;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.market-paste-fallback .field-block {
+  margin-top: 0.65rem;
+}
+
+.market-paste-fallback .secondary-button {
+  width: 100%;
+  margin-top: 0.55rem;
+}
+
+.manual-market-panel {
+  margin-top: 0.75rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.manual-market-panel summary {
+  padding: 0.55rem 0 0.75rem;
+  cursor: pointer;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.manual-market-panel .market-price-grid {
+  padding-bottom: 0.85rem;
 }
 
 .market-price-grid {

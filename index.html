@@ -13,9 +13,9 @@
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
-    <link rel="stylesheet" href="style.css?v=5">
+    <link rel="stylesheet" href="style.css?v=6">
     <script src="vendor/zxing-browser.min.js" defer></script>
-    <script type="module" src="app.js?v=5"></script>
+    <script type="module" src="app.js?v=6"></script>
   </head>
   <body>
     <a class="skip-link" href="#main">本文へ移動</a>
@@ -95,7 +95,7 @@
             <li>ほかのカメラアプリを閉じ、Safariを再起動します。</li>
           </ol>
           <button id="copyAppUrlButton" class="secondary-button" type="button">公開URLをコピー</button>
-          <a class="diagnostic-link" href="camera-test.html?v=5">カメラ端末診断を開く</a>
+          <a class="diagnostic-link" href="camera-test.html?v=6">カメラ端末診断を開く</a>
         </details>
         <div class="camera-controls">
           <button id="startScanButton" class="primary-button" type="button">カメラを開始</button>
@@ -115,6 +115,11 @@
           <h2 id="purchaseHeading">値札を読む、または価格を入力</h2>
           <p>OCR候補から選ぶか、数字を直接入力します。</p>
         </div>
+        <button id="openPurchasePriceButton" class="price-entry-button" type="button">
+          <span>仕入価格を入力</span>
+          <strong id="purchasePriceDisplay">未入力</strong>
+        </button>
+        <input id="purchasePriceInput" type="hidden" value="">
         <button id="openPriceScannerButton" class="scan-price-button" type="button"><span aria-hidden="true">▣</span> 値札をカメラで読み取る</button>
 
         <div id="priceScannerPanel" class="price-scanner-panel" hidden>
@@ -137,9 +142,24 @@
         </div>
 
         <div class="form-grid purchase-fields">
-          <label><span>仕入価格 <em>必須</em></span><span class="input-with-unit"><input id="purchasePriceInput" type="number" min="0" step="1" inputmode="numeric" placeholder="0" required><span>円</span></span></label>
           <label><span>店舗名</span><input id="storeNameInput" type="text" enterkeyhint="next" placeholder="例：○○店"></label>
         </div>
+        <dialog id="purchasePriceDialog" class="price-entry-dialog" aria-labelledby="purchasePriceDialogHeading">
+          <form id="purchasePriceDialogForm">
+            <div class="dialog-heading">
+              <p class="step-label">仕入価格</p>
+              <h3 id="purchasePriceDialogHeading">値札の金額を入力</h3>
+            </div>
+            <label class="field-block price-editor-field" for="purchasePriceEditor">
+              <span>仕入価格</span>
+              <span class="input-with-unit"><input id="purchasePriceEditor" type="number" min="0" step="1" inputmode="numeric" placeholder="例：1980" required><span>円</span></span>
+            </label>
+            <div class="dialog-actions">
+              <button id="cancelPurchasePriceButton" class="secondary-button" type="button">キャンセル</button>
+              <button class="primary-button" type="submit">この金額にする</button>
+            </div>
+          </form>
+        </dialog>
       </section>
 
       <section id="search-section" class="card" aria-labelledby="searchHeading">
@@ -165,16 +185,31 @@
       <section id="market-section" class="card" aria-labelledby="marketHeading">
         <div class="section-heading">
           <p class="step-label"><span>4</span> 売却相場</p>
-          <h2 id="marketHeading">売れた価格を最大5件入力</h2>
-          <p>中央値を想定売価へ自動反映します。</p>
+          <h2 id="marketHeading">売れた価格をまとめて取込</h2>
+          <p>検索結果から価格をコピーすると、最大5件と中央値を自動反映します。</p>
         </div>
-        <div class="market-price-grid">
-          <label><span>相場 1</span><span class="input-with-unit"><input class="market-price-input" type="number" min="0" step="1" inputmode="numeric" aria-label="販売済み価格1"><span>円</span></span></label>
-          <label><span>相場 2</span><span class="input-with-unit"><input class="market-price-input" type="number" min="0" step="1" inputmode="numeric" aria-label="販売済み価格2"><span>円</span></span></label>
-          <label><span>相場 3</span><span class="input-with-unit"><input class="market-price-input" type="number" min="0" step="1" inputmode="numeric" aria-label="販売済み価格3"><span>円</span></span></label>
-          <label><span>相場 4</span><span class="input-with-unit"><input class="market-price-input" type="number" min="0" step="1" inputmode="numeric" aria-label="販売済み価格4"><span>円</span></span></label>
-          <label><span>相場 5</span><span class="input-with-unit"><input class="market-price-input" type="number" min="0" step="1" inputmode="numeric" aria-label="販売済み価格5"><span>円</span></span></label>
+        <div class="market-import-panel">
+          <button id="pasteMarketPricesButton" class="primary-button market-paste-button" type="button">コピーした価格をまとめて読込</button>
+          <p id="marketImportStatus" class="inline-hint" role="status">価格の改行・空白・カンマ・円記号を自動判定します。</p>
+          <details class="market-paste-fallback">
+            <summary>長押しで貼り付ける／直接入力する</summary>
+            <label class="field-block" for="marketBulkInput">
+              <span>価格をまとめて貼り付け</span>
+              <textarea id="marketBulkInput" rows="3" inputmode="text" placeholder="例：￥3,980  4,200円  3,500円"></textarea>
+            </label>
+            <button id="applyMarketPricesButton" class="secondary-button" type="button">貼り付けた価格を反映</button>
+          </details>
         </div>
+        <details class="manual-market-panel">
+          <summary>1件ずつ手入力・修正する</summary>
+          <div class="market-price-grid">
+            <label><span>相場 1</span><span class="input-with-unit"><input class="market-price-input" type="number" min="0" step="1" inputmode="numeric" aria-label="販売済み価格1"><span>円</span></span></label>
+            <label><span>相場 2</span><span class="input-with-unit"><input class="market-price-input" type="number" min="0" step="1" inputmode="numeric" aria-label="販売済み価格2"><span>円</span></span></label>
+            <label><span>相場 3</span><span class="input-with-unit"><input class="market-price-input" type="number" min="0" step="1" inputmode="numeric" aria-label="販売済み価格3"><span>円</span></span></label>
+            <label><span>相場 4</span><span class="input-with-unit"><input class="market-price-input" type="number" min="0" step="1" inputmode="numeric" aria-label="販売済み価格4"><span>円</span></span></label>
+            <label><span>相場 5</span><span class="input-with-unit"><input class="market-price-input" type="number" min="0" step="1" inputmode="numeric" aria-label="販売済み価格5"><span>円</span></span></label>
+          </div>
+        </details>
         <dl class="market-stats">
           <div class="primary-stat"><dt>中央値</dt><dd id="medianResult">―</dd></div>
           <div><dt>平均値</dt><dd id="averageResult">―</dd></div>
@@ -285,7 +320,7 @@
 
     <footer class="app-footer">
       <p>Barcode Profit Finder</p>
-      <p>カメラ修正版 v5</p>
+      <p>相場まとめ入力 v6</p>
       <p>最終判断は商品の状態、需要、各サイトの規約も確認してください。</p>
     </footer>
     <noscript>このアプリを使うにはJavaScriptを有効にしてください。</noscript>

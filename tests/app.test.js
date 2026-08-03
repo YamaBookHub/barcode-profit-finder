@@ -7,6 +7,7 @@ import {
   calculateMarketStats,
   calculateProfit,
   calculateTurnover,
+  extractMarketPrices,
   judgePurchase,
 } from "../calculator.js";
 import {
@@ -65,6 +66,14 @@ test("最大5件の相場から中央値・平均・最安・最高を計算す�
     max: 9000,
     prices: [3000, 4000, 5000, 9000],
   });
+});
+
+test("コピーした価格テキストから最大5件をまとめて抽出する", () => {
+  assert.deepEqual(
+    extractMarketPrices("商品名 13型\n￥3,980\n4,200円\n￥３，５００\n￥3,980\n送料750", 5),
+    [3980, 4200, 3500, 3980],
+  );
+  assert.deepEqual(extractMarketPrices("3980 4200 3500 4800 5100 9999"), [3980, 4200, 3500, 4800, 5100]);
 });
 
 test("販売済み件数と現在出品数から回転スコアを返す", () => {
