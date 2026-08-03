@@ -449,6 +449,31 @@ a[aria-disabled="true"] {
   white-space: pre-line;
 }
 
+.camera-help {
+  margin-top: 0.75rem;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-soft);
+}
+
+.camera-help summary {
+  cursor: pointer;
+  color: var(--primary-strong);
+  font-weight: 850;
+}
+
+.camera-help ol {
+  margin: 0.65rem 0;
+  padding-left: 1.35rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.camera-help .secondary-button {
+  width: 100%;
+}
+
 .camera-controls,
 .button-row,
 .save-actions {

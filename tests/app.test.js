@@ -9,7 +9,14 @@ import {
   calculateTurnover,
   judgePurchase,
 } from "../calculator.js";
-import { DuplicateGuard, cameraErrorMessage, extractPriceCandidates, normalizeBarcode } from "../scanner.js";
+import {
+  CAMERA_CONSTRAINT_ATTEMPTS,
+  DuplicateGuard,
+  cameraErrorMessage,
+  extractPriceCandidates,
+  normalizeBarcode,
+  requestCameraStream,
+} from "../scanner.js";
 import { StorageRepository, csvEscape, itemsToCsv } from "../storage.js";
 
 class MemoryStorage {
@@ -88,6 +95,49 @@ test("カメラ権限拒否時にSafariの対処方法を日本語で返す", ()
   const message = cameraErrorMessage({ name: "NotAllowedError" });
   assert.match(message, /カメラの利用が許可されていません/);
   assert.match(message, /Webサイトの設定/);
+  assert.match(message, /NotAllowedError/);
+});
+
+test("iPhone向け背面カメラ制約に失敗したら単純なvideo指定へフォールバックする", async () => {
+  const calls = [];
+  const expectedStream = { getTracks: () => [] };
+  const mediaDevices = {
+    async getUserMedia(constraints) {
+      calls.push(constraints);
+      if (calls.length === 1) {
+        const error = new Error("constraint failed");
+        error.name = "OverconstrainedError";
+        throw error;
+      }
+      return expectedStream;
+    },
+  };
+  assert.equal(await requestCameraStream(mediaDevices), expectedStream);
+  assert.deepEqual(calls, CAMERA_CONSTRAINT_ATTEMPTS);
+});
+
+test("カメラ権限拒否時は許可ダイアログを繰り返さない", async () => {
+  let calls = 0;
+  const mediaDevices = {
+    async getUserMedia() {
+      calls += 1;
+      const error = new Error("denied");
+      error.name = "NotAllowedError";
+      throw error;
+    },
+  };
+  await assert.rejects(() => requestCameraStream(mediaDevices), { name: "NotAllowedError" });
+  assert.equal(calls, 1);
+});
+
+test("ホーム画面版のカメラ停止時はSafari本体で開く案内を表示する", () => {
+  const message = cameraErrorMessage(
+    { name: "TrackEndedError" },
+    undefined,
+    { standalone: true },
+  );
+  assert.match(message, /Safari本体/);
+  assert.match(message, /TrackEndedError/);
 });
 
 test("商品・設定の保存、JSON復元、CSVエスケープが機能する", () => {

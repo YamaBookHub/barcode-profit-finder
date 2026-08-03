@@ -8,9 +8,9 @@ import {
   judgePurchase,
   normalizeSettings,
   toNonNegative,
-} from "./calculator.js";
-import { BarcodeScanner, PriceTagScanner, normalizeBarcode } from "./scanner.js";
-import { StorageRepository, itemsToCsv } from "./storage.js";
+} from "./calculator.js?v=3";
+import { BarcodeScanner, PriceTagScanner, normalizeBarcode } from "./scanner.js?v=3";
+import { StorageRepository, itemsToCsv } from "./storage.js?v=3";
 
 const byId = (id) => document.getElementById(id);
 const elements = {
@@ -36,6 +36,7 @@ const elements = {
   cameraVideo: byId("cameraVideo"),
   cameraStatus: byId("cameraStatus"),
   cameraError: byId("cameraError"),
+  copyAppUrlButton: byId("copyAppUrlButton"),
   scanSuccess: byId("scanSuccess"),
   startScanButton: byId("startScanButton"),
   stopScanButton: byId("stopScanButton"),
@@ -132,6 +133,16 @@ function showToast(message, duration = 2400) {
   elements.toast.textContent = message;
   elements.toast.hidden = false;
   toastTimer = window.setTimeout(() => { elements.toast.hidden = true; }, duration);
+}
+
+async function copyPublicUrl() {
+  const publicUrl = "https://yamabookhub.github.io/barcode-profit-finder/";
+  try {
+    await navigator.clipboard.writeText(publicUrl);
+    showToast("公開URLをコピーしました。Safariのアドレス欄に貼り付けてください。", 3600);
+  } catch {
+    window.prompt("このURLをコピーしてSafariで開いてください。", publicUrl);
+  }
 }
 
 function formatCurrency(value) {
@@ -559,6 +570,7 @@ function closeTutorial() {
 }
 
 function registerEvents() {
+  elements.copyAppUrlButton.addEventListener("click", copyPublicUrl);
   elements.startScanButton.addEventListener("click", async () => {
     closePriceScanner();
     await barcodeScanner.start();

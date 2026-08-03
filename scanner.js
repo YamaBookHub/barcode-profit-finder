@@ -6,21 +6,67 @@ export function normalizeBarcode(value) {
     .toUpperCase();
 }
 
-export function cameraErrorMessage(error, manualFallback = "JANコードを手入力してください。") {
-  const name = error?.name ?? "";
+export const CAMERA_CONSTRAINT_ATTEMPTS = Object.freeze([
+  Object.freeze({ audio: false, video: Object.freeze({ facingMode: "environment" }) }),
+  Object.freeze({ audio: false, video: true }),
+]);
+
+const CAMERA_RETRYABLE_ERRORS = new Set([
+  "AbortError",
+  "ConstraintNotSatisfiedError",
+  "OverconstrainedError",
+  "TypeError",
+  "UnknownError",
+]);
+
+export function isStandaloneDisplay(scope = globalThis) {
+  return Boolean(
+    scope.navigator?.standalone === true
+    || scope.matchMedia?.("(display-mode: standalone)")?.matches,
+  );
+}
+
+export async function requestCameraStream(mediaDevices = globalThis.navigator?.mediaDevices) {
+  if (!mediaDevices?.getUserMedia) {
+    const error = new Error("getUserMedia is unavailable");
+    error.name = "NotSupportedError";
+    throw error;
+  }
+
+  let lastError;
+  for (let index = 0; index < CAMERA_CONSTRAINT_ATTEMPTS.length; index += 1) {
+    try {
+      return await mediaDevices.getUserMedia(CAMERA_CONSTRAINT_ATTEMPTS[index]);
+    } catch (error) {
+      lastError = error;
+      const canRetry = index < CAMERA_CONSTRAINT_ATTEMPTS.length - 1
+        && CAMERA_RETRYABLE_ERRORS.has(error?.name ?? "");
+      if (!canRetry) throw error;
+    }
+  }
+  throw lastError;
+}
+
+export function cameraErrorMessage(error, manualFallback = "JANコードを手入力してください。", context = {}) {
+  const name = error?.name || error?.constructor?.name || "UnknownError";
+  const standaloneAdvice = context.standalone
+    ? "\nホーム画面版で失敗する場合は、下の「公開URLをコピー」からSafari本体で直接開いてください。"
+    : "";
+  let message;
   if (name === "NotAllowedError" || name === "PermissionDeniedError" || name === "SecurityError") {
-    return "カメラの利用が許可されていません。\nSafariのアドレスバー左側のメニュー → Webサイトの設定 → カメラ → 許可 に変更して再読み込みしてください。\niPhoneの設定アプリ → アプリ → Safari → カメラ でも確認できます。";
+    message = "カメラの利用が許可されていません。\nSafariのアドレスバー左側のメニュー → Webサイトの設定 → カメラ → 許可 に変更して再読み込みしてください。\niPhoneの設定アプリ → アプリ → Safari → カメラ でも確認できます。";
+  } else if (name === "NotFoundError" || name === "DevicesNotFoundError") {
+    message = `利用できるカメラが見つかりません。${manualFallback}`;
+  } else if (["NotReadableError", "TrackStartError", "TrackEndedError", "AbortError"].includes(name)) {
+    message = "カメラ映像が開始直後に停止しました。ほかのカメラアプリを完全に閉じ、Safariを再起動してからお試しください。";
+  } else if (name === "OverconstrainedError" || name === "ConstraintNotSatisfiedError") {
+    message = "この端末のカメラ設定に対応できませんでした。制約を減らして再試行しましたが開始できませんでした。";
+  } else if (name === "NotSupportedError") {
+    message = "この画面ではカメラAPIを利用できません。LINE・Googleアプリ等の内蔵ブラウザではなくSafari本体で公開URLを開いてください。";
+  } else {
+    message = `カメラを開始できませんでした。Safariを再起動するか、${manualFallback}`;
   }
-  if (name === "NotFoundError" || name === "DevicesNotFoundError") {
-    return `利用できるカメラが見つかりません。${manualFallback}`;
-  }
-  if (name === "NotReadableError" || name === "TrackStartError") {
-    return "カメラを開始できませんでした。他のカメラアプリを閉じてから、もう一度お試しください。";
-  }
-  if (name === "OverconstrainedError") {
-    return "この端末のカメラ設定に対応できませんでした。ページを再読み込みして、もう一度お試しください。";
-  }
-  return `カメラを開始できませんでした。Safariを再読み込みするか、${manualFallback}`;
+  return `${message}${standaloneAdvice}\nエラー識別：${name}`;
 }
 
 export class DuplicateGuard {
@@ -60,6 +106,9 @@ export class BarcodeScanner {
     this.onStateChange = onStateChange ?? (() => {});
     this.controls = null;
     this.reader = null;
+    this.stream = null;
+    this.active = false;
+    this.sessionId = 0;
     this.guard = new DuplicateGuard(3000);
   }
 
@@ -81,8 +130,17 @@ export class BarcodeScanner {
     }
 
     this.stop("カメラを準備しています…");
+    const sessionId = this.sessionId;
     this.onStateChange(true);
     try {
+      this.video.autoplay = true;
+      this.video.muted = true;
+      this.video.playsInline = true;
+      this.video.setAttribute("autoplay", "");
+      this.video.setAttribute("muted", "");
+      this.video.setAttribute("playsinline", "");
+      this.video.setAttribute("webkit-playsinline", "");
+
       const hints = new Map();
       hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
         ZXing.BarcodeFormat.EAN_13,
@@ -98,15 +156,30 @@ export class BarcodeScanner {
         tryPlayVideoTimeout: 5000,
       });
 
-      this.controls = await this.reader.decodeFromConstraints(
-        {
-          audio: false,
-          video: {
-            facingMode: { ideal: "environment" },
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-          },
-        },
+      const stream = await requestCameraStream();
+      if (sessionId !== this.sessionId) {
+        stream.getTracks().forEach((track) => track.stop());
+        return false;
+      }
+      const videoTrack = stream.getVideoTracks()[0];
+      if (!videoTrack || videoTrack.readyState === "ended") {
+        stream.getTracks().forEach((track) => track.stop());
+        const error = new Error("Camera track ended before playback");
+        error.name = "TrackEndedError";
+        throw error;
+      }
+      this.stream = stream;
+      this.active = true;
+      videoTrack.addEventListener("ended", () => {
+        if (!this.active || sessionId !== this.sessionId) return;
+        const error = new Error("Camera track ended during playback");
+        error.name = "TrackEndedError";
+        this.stop("カメラ映像が停止しました");
+        this.onError(cameraErrorMessage(error, undefined, { standalone: isStandaloneDisplay() }));
+      }, { once: true });
+
+      this.controls = await this.reader.decodeFromStream(
+        stream,
         this.video,
         (result, error, controls) => {
           if (result) {
@@ -125,18 +198,24 @@ export class BarcodeScanner {
           }
         },
       );
+      if (sessionId !== this.sessionId) return false;
       this.onStatus("読取中です。バーコードを枠内に合わせてください");
       return true;
     } catch (error) {
+      if (sessionId !== this.sessionId) return false;
       this.stop("カメラを開始できませんでした");
-      this.onError(cameraErrorMessage(error));
+      this.onError(cameraErrorMessage(error, undefined, { standalone: isStandaloneDisplay() }));
       return false;
     }
   }
 
   stop(status = "カメラを停止しました") {
+    this.active = false;
+    this.sessionId += 1;
     try { this.controls?.stop(); } catch { /* すでに停止済み */ }
     this.controls = null;
+    if (this.stream?.getTracks) this.stream.getTracks().forEach((track) => track.stop());
+    this.stream = null;
     stopMedia(this.video);
     this.onStateChange(false);
     this.onStatus(status);
@@ -247,23 +326,21 @@ export class PriceTagScanner {
     this.stop("値札カメラを準備しています…");
     this.onStateChange(true);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: false,
-        video: {
-          facingMode: { ideal: "environment" },
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
-      });
+      const stream = await requestCameraStream();
       this.video.srcObject = stream;
+      this.video.autoplay = true;
       this.video.muted = true;
+      this.video.playsInline = true;
+      this.video.setAttribute("autoplay", "");
+      this.video.setAttribute("muted", "");
       this.video.setAttribute("playsinline", "");
+      this.video.setAttribute("webkit-playsinline", "");
       await this.video.play();
       this.onStatus("値段が中央の枠に大きく入るように合わせてください");
       return true;
     } catch (error) {
       this.stop("値札カメラを開始できませんでした");
-      this.onError(cameraErrorMessage(error, "仕入価格を手入力してください。"));
+      this.onError(cameraErrorMessage(error, "仕入価格を手入力してください。", { standalone: isStandaloneDisplay() }));
       return false;
     }
   }

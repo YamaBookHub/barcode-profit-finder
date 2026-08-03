@@ -13,9 +13,9 @@
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=3">
     <script src="vendor/zxing-browser.min.js" defer></script>
-    <script type="module" src="app.js"></script>
+    <script type="module" src="app.js?v=3"></script>
   </head>
   <body>
     <a class="skip-link" href="#main">本文へ移動</a>
@@ -80,13 +80,22 @@
         </div>
 
         <div id="cameraFrame" class="camera-frame">
-          <video id="cameraVideo" muted playsinline aria-label="バーコード読取用カメラ"></video>
+          <video id="cameraVideo" autoplay muted playsinline webkit-playsinline aria-label="バーコード読取用カメラ"></video>
           <div class="scan-guide barcode-guide" aria-hidden="true"><span></span></div>
           <p id="cameraPlaceholder" class="camera-placeholder">「カメラを開始」を押してください</p>
           <p id="scanSuccess" class="scan-success" hidden>✓ 読み取りました</p>
         </div>
         <p id="cameraStatus" class="status-message" role="status">カメラは停止中です</p>
         <div id="cameraError" class="error-message" role="alert" hidden></div>
+        <details class="camera-help">
+          <summary>カメラが始まらない場合</summary>
+          <ol>
+            <li>LINEやGoogleアプリ内ではなく、Safari本体で開きます。</li>
+            <li>Safariのアドレスバー左側メニュー →「Webサイトの設定」→「カメラ」→「許可」にします。</li>
+            <li>ほかのカメラアプリを閉じ、Safariを再起動します。</li>
+          </ol>
+          <button id="copyAppUrlButton" class="secondary-button" type="button">公開URLをコピー</button>
+        </details>
         <div class="camera-controls">
           <button id="startScanButton" class="primary-button" type="button">カメラを開始</button>
           <button id="stopScanButton" class="secondary-button" type="button" disabled>停止</button>
@@ -109,7 +118,7 @@
 
         <div id="priceScannerPanel" class="price-scanner-panel" hidden>
           <div class="camera-frame price-camera-frame">
-            <video id="priceCameraVideo" muted playsinline aria-label="値札読取用カメラ"></video>
+            <video id="priceCameraVideo" autoplay muted playsinline webkit-playsinline aria-label="値札読取用カメラ"></video>
             <div class="price-guide" aria-hidden="true">値段をここに大きく</div>
             <p id="priceCameraPlaceholder" class="camera-placeholder">「値札カメラを開始」を押してください</p>
           </div>
