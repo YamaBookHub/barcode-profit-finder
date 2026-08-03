@@ -84,6 +84,13 @@ test("検索URLにバーコードを埋め込みAmazonを含める", () => {
   assert.equal(barcode, "490123");
 });
 
+test("商品名があればJANコードより商品名を検索語に使う", () => {
+  const urls = buildSearchUrls("4901234567894", "ワイヤレスイヤホン");
+  assert.equal(urls.term, "ワイヤレスイヤホン");
+  assert.match(urls.mercari, /%E3%83%AF%E3%82%A4%E3%83%A4%E3%83%AC%E3%82%B9/);
+  assert.doesNotMatch(urls.mercari, /4901234567894/);
+});
+
 test("重複コードを3秒間抑止し、値札の金額候補を抽出する", () => {
   const guard = new DuplicateGuard(3000);
   assert.equal(guard.isDuplicate("490", 1000), false);

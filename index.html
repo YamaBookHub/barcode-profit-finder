@@ -13,9 +13,9 @@
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
-    <link rel="stylesheet" href="style.css?v=7">
+    <link rel="stylesheet" href="style.css?v=9">
     <script src="vendor/zxing-browser.min.js" defer></script>
-    <script type="module" src="app.js?v=7"></script>
+    <script type="module" src="app.js?v=9"></script>
   </head>
   <body>
     <a class="skip-link" href="#main">本文へ移動</a>
@@ -37,7 +37,7 @@
 
     <aside id="resultHero" class="result-hero is-empty" aria-live="polite" aria-atomic="true">
       <div>
-        <p class="result-kicker">いまの仕入判定</p>
+        <p class="result-kicker">仕入判定</p>
         <p id="heroVerdict" class="hero-verdict">価格を入力してください</p>
       </div>
       <div class="hero-numbers">
@@ -95,7 +95,7 @@
             <li>ほかのカメラアプリを閉じ、Safariを再起動します。</li>
           </ol>
           <button id="copyAppUrlButton" class="secondary-button" type="button">公開URLをコピー</button>
-          <a class="diagnostic-link" href="camera-test.html?v=7">カメラ端末診断を開く</a>
+          <a class="diagnostic-link" href="camera-test.html?v=9">カメラ端末診断を開く</a>
         </details>
         <div class="camera-controls">
           <button id="startScanButton" class="primary-button" type="button">カメラを開始</button>
@@ -152,8 +152,14 @@
             </div>
             <label class="field-block price-editor-field" for="purchasePriceEditor">
               <span>仕入価格</span>
-              <span class="input-with-unit"><input id="purchasePriceEditor" type="number" min="0" step="1" inputmode="numeric" placeholder="例：1980" required><span>円</span></span>
+              <span class="input-with-unit"><input id="purchasePriceEditor" type="text" inputmode="none" placeholder="0" readonly aria-live="polite"><span>円</span></span>
             </label>
+            <div class="number-keypad" data-keypad-for="purchasePriceEditor" aria-label="仕入価格の数字入力">
+              <button type="button" data-number-key="1">1</button><button type="button" data-number-key="2">2</button><button type="button" data-number-key="3">3</button>
+              <button type="button" data-number-key="4">4</button><button type="button" data-number-key="5">5</button><button type="button" data-number-key="6">6</button>
+              <button type="button" data-number-key="7">7</button><button type="button" data-number-key="8">8</button><button type="button" data-number-key="9">9</button>
+              <button class="keypad-command" type="button" data-number-key="clear">消す</button><button type="button" data-number-key="0">0</button><button class="keypad-command" type="button" data-number-key="backspace" aria-label="1文字消す">←</button>
+            </div>
             <div class="dialog-actions">
               <button id="cancelPurchasePriceButton" class="secondary-button" type="button">キャンセル</button>
               <button class="primary-button" type="submit">この金額にする</button>
@@ -166,9 +172,10 @@
         <div class="section-heading">
           <p class="step-label"><span>3</span> 相場検索</p>
           <h2 id="searchHeading">販売相場を調べる</h2>
-          <p>JANコードを優先し、未入力なら商品名で検索します。</p>
+          <p>商品名があれば商品名で検索します。未入力のときだけJANコードを使います。</p>
         </div>
-        <label class="field-block" for="productNameInput"><span>商品名</span><input id="productNameInput" type="text" enterkeyhint="next" placeholder="例：ワイヤレスイヤホン"></label>
+        <label class="field-block" for="productNameInput"><span>商品名（検索はこちらを優先）</span><input id="productNameInput" type="text" enterkeyhint="next" placeholder="例：ワイヤレスイヤホン"></label>
+        <p id="productLookupStatus" class="inline-hint" role="status">本のISBNはスキャン後に商品名を自動取得します。</p>
         <div id="searchLinks" class="search-grid">
           <a data-search="google" class="search-button" href="#" target="_blank" rel="noopener noreferrer" aria-disabled="true">Google商品検索 <span aria-hidden="true">↗</span></a>
           <a data-search="mercari" class="search-button" href="#" target="_blank" rel="noopener noreferrer" aria-disabled="true">メルカリ検索 <span aria-hidden="true">↗</span></a>
@@ -217,8 +224,14 @@
             </div>
             <label class="field-block price-editor-field" for="marketPriceEditor">
               <span>売れた価格</span>
-              <span class="input-with-unit"><input id="marketPriceEditor" type="number" min="1" step="1" inputmode="numeric" placeholder="例：3980" required><span>円</span></span>
+              <span class="input-with-unit"><input id="marketPriceEditor" type="text" inputmode="none" placeholder="0" readonly aria-live="polite"><span>円</span></span>
             </label>
+            <div class="number-keypad" data-keypad-for="marketPriceEditor" aria-label="売れた価格の数字入力">
+              <button type="button" data-number-key="1">1</button><button type="button" data-number-key="2">2</button><button type="button" data-number-key="3">3</button>
+              <button type="button" data-number-key="4">4</button><button type="button" data-number-key="5">5</button><button type="button" data-number-key="6">6</button>
+              <button type="button" data-number-key="7">7</button><button type="button" data-number-key="8">8</button><button type="button" data-number-key="9">9</button>
+              <button class="keypad-command" type="button" data-number-key="clear">消す</button><button type="button" data-number-key="0">0</button><button class="keypad-command" type="button" data-number-key="backspace" aria-label="1文字消す">←</button>
+            </div>
             <div class="dialog-actions">
               <button id="finishMarketPriceButton" class="secondary-button" type="button">完了</button>
               <button id="applyMarketPriceButton" class="primary-button" type="submit">追加して次へ</button>
@@ -314,7 +327,7 @@
         <div class="tutorial-slide" data-tutorial-slide="2" hidden>
           <span class="tutorial-icon" aria-hidden="true">✓</span>
           <h2>相場を入れて即判断</h2>
-          <p>販売済み価格を入れると中央値を自動採用。「買い・要確認・見送り」を上部で確認します。</p>
+          <p>販売済み価格を入れると中央値を自動採用。「買い・要確認・見送り」は画面下の固定バーですぐ確認できます。</p>
         </div>
         <div class="tutorial-actions">
           <button id="tutorialSkipButton" class="text-button" type="button">スキップ</button>
@@ -324,6 +337,30 @@
     </div>
 
     <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+    <dialog id="numberInputDialog" class="price-entry-dialog number-input-dialog" aria-labelledby="numberInputDialogHeading">
+      <form id="numberInputDialogForm">
+        <div class="dialog-heading">
+          <p class="step-label">画面で数字入力</p>
+          <h3 id="numberInputDialogHeading">金額を入力</h3>
+        </div>
+        <label class="field-block price-editor-field" for="numberInputEditor">
+          <span id="numberInputLabel">金額</span>
+          <input id="numberInputEditor" class="number-input-display" type="text" inputmode="none" placeholder="0" readonly aria-live="polite">
+        </label>
+        <div id="generalNumberKeypad" class="number-keypad" data-keypad-for="numberInputEditor" aria-label="数字入力">
+          <button type="button" data-number-key="1">1</button><button type="button" data-number-key="2">2</button><button type="button" data-number-key="3">3</button>
+          <button type="button" data-number-key="4">4</button><button type="button" data-number-key="5">5</button><button type="button" data-number-key="6">6</button>
+          <button type="button" data-number-key="7">7</button><button type="button" data-number-key="8">8</button><button type="button" data-number-key="9">9</button>
+          <button class="keypad-command" type="button" data-number-key="clear">消す</button><button type="button" data-number-key="0">0</button><button class="keypad-command" type="button" data-number-key="backspace" aria-label="1文字消す">←</button>
+          <button id="decimalKeyButton" class="keypad-decimal" type="button" data-number-key="decimal" hidden>小数点 .</button>
+        </div>
+        <div class="dialog-actions">
+          <button id="cancelNumberInputButton" class="secondary-button" type="button">キャンセル</button>
+          <button class="primary-button" type="submit">この数字にする</button>
+        </div>
+      </form>
+    </dialog>
 
     <nav class="bottom-nav" aria-label="主要画面">
       <a href="#scan-section"><span aria-hidden="true">▤</span>スキャン</a>
@@ -335,7 +372,7 @@
 
     <footer class="app-footer">
       <p>Barcode Profit Finder</p>
-      <p>スマホ価格入力 v7</p>
+      <p>3秒判定UI v9</p>
       <p>最終判断は商品の状態、需要、各サイトの規約も確認してください。</p>
     </footer>
     <noscript>このアプリを使うにはJavaScriptを有効にしてください。</noscript>

@@ -50,7 +50,7 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic UI", "Noto Sans JP", sans-serif;
   font-size: 16px;
   line-height: 1.6;
-  padding-bottom: calc(5.2rem + var(--safe-bottom));
+  padding-bottom: calc(10.4rem + var(--safe-bottom));
 }
 
 button,
@@ -152,47 +152,56 @@ a[aria-disabled="true"] {
 }
 
 .result-hero {
-  position: sticky;
-  z-index: 50;
-  top: 0;
+  position: fixed;
+  z-index: 85;
+  right: calc(0.5rem + var(--safe-right));
+  bottom: calc(4.15rem + var(--safe-bottom));
+  left: calc(0.5rem + var(--safe-left));
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.8rem;
-  width: min(calc(100% - 1rem), 744px);
-  margin: 0 auto 1rem;
-  padding: 0.9rem 1rem;
-  border: 1px solid transparent;
-  border-radius: 18px;
+  gap: 0.65rem;
+  width: min(calc(100% - 1rem - var(--safe-left) - var(--safe-right)), 744px);
+  margin: 0 auto;
+  padding: 0.65rem 0.85rem;
+  border: 2px solid var(--line);
+  border-radius: 16px;
   background: var(--surface);
-  box-shadow: var(--shadow);
+  box-shadow: 0 10px 28px rgb(0 0 0 / 22%);
   transition: background-color 180ms ease, border-color 180ms ease, transform 180ms ease;
 }
 
-.result-hero.is-candidate {
-  border-color: color-mix(in srgb, var(--candidate) 35%, transparent);
-  background: var(--candidate-soft);
+.result-hero.is-empty .hero-numbers {
+  display: none;
+}
+
+.result-hero.is-candidate,
+.result-hero.is-strong {
+  border-color: #045b3b;
+  background: #087d50;
+  color: #fff;
 }
 
 .result-hero.is-strong {
-  border-color: color-mix(in srgb, var(--candidate) 55%, transparent);
-  background: var(--candidate-soft);
-  box-shadow: 0 12px 34px color-mix(in srgb, var(--candidate) 22%, transparent);
+  box-shadow: 0 10px 30px rgb(8 125 80 / 42%);
 }
 
 .result-hero.is-review {
-  border-color: color-mix(in srgb, var(--review) 38%, transparent);
-  background: var(--review-soft);
+  border-color: #8a5200;
+  background: #ffd66b;
+  color: #422700;
 }
 
 .result-hero.is-loss {
-  border-color: color-mix(in srgb, var(--danger) 35%, transparent);
-  background: var(--danger-soft);
+  border-color: #841a26;
+  background: var(--danger);
+  color: #fff;
 }
 
 .result-hero.is-skip {
-  border-color: var(--line);
-  background: var(--skip-soft);
+  border-color: #3e4a48;
+  background: var(--skip);
+  color: #fff;
 }
 
 .result-kicker {
@@ -202,9 +211,9 @@ a[aria-disabled="true"] {
 
 .hero-verdict {
   margin: 0.05rem 0 0;
-  font-size: clamp(1.1rem, 5.4vw, 1.55rem);
+  font-size: clamp(1.2rem, 5.8vw, 1.65rem);
   font-weight: 900;
-  line-height: 1.25;
+  line-height: 1.15;
 }
 
 .hero-numbers {
@@ -228,6 +237,11 @@ a[aria-disabled="true"] {
   color: var(--muted);
   font-size: 0.72rem;
   font-weight: 700;
+}
+
+.result-hero:not(.is-empty) .hero-numbers span {
+  color: currentColor;
+  opacity: 0.82;
 }
 
 .hero-numbers strong {
@@ -895,7 +909,7 @@ textarea:focus {
   position: fixed;
   z-index: 100;
   right: calc(0.75rem + var(--safe-right));
-  bottom: calc(5.4rem + var(--safe-bottom));
+  bottom: calc(9.6rem + var(--safe-bottom));
   left: calc(0.75rem + var(--safe-left));
   width: min(calc(100% - 1.5rem), 560px);
   margin: 0 auto;
@@ -969,8 +983,9 @@ textarea:focus {
 }
 
 .price-entry-button.has-value {
-  background: var(--surface);
-  color: var(--primary-strong);
+  border-color: #045b3b;
+  background: #087d50;
+  color: #fff;
 }
 
 .scan-price-button {
@@ -1022,6 +1037,57 @@ textarea:focus {
   font-size: 1.55rem;
   font-weight: 900;
   text-align: right;
+}
+
+.number-keypad {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.48rem;
+  margin-top: 0.75rem;
+}
+
+.number-keypad button {
+  min-height: 54px;
+  padding: 0.35rem;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--surface-soft);
+  color: var(--text);
+  font: inherit;
+  font-size: 1.35rem;
+  font-weight: 900;
+  box-shadow: 0 2px 5px rgb(0 0 0 / 8%);
+}
+
+.number-keypad button:active {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  transform: translateY(1px);
+}
+
+.number-keypad .keypad-command {
+  color: var(--primary-strong);
+  font-size: 1rem;
+}
+
+.number-keypad .keypad-decimal {
+  grid-column: 1 / -1;
+  min-height: 44px;
+  font-size: 1rem;
+}
+
+.number-input-dialog {
+  max-height: calc(100dvh - 1rem - var(--safe-top) - var(--safe-bottom));
+  overflow-y: auto;
+}
+
+.number-input-display {
+  text-align: right;
+}
+
+input[data-screen-number] {
+  caret-color: transparent;
+  cursor: pointer;
 }
 
 .dialog-actions {
@@ -1491,13 +1557,14 @@ body.has-modal {
   }
 
   .result-hero {
-    align-items: flex-start;
-    gap: 0.45rem;
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0.6rem 0.72rem;
   }
 
   .hero-numbers {
-    grid-template-columns: 1fr;
-    gap: 0.2rem;
+    grid-template-columns: repeat(2, auto);
+    gap: 0.5rem;
   }
 
   .form-grid {

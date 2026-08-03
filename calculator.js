@@ -153,7 +153,7 @@ function normalizeSearchTerm(value) {
 }
 
 export function buildSearchUrls(barcode, productName = "") {
-  const term = normalizeSearchTerm(barcode) || normalizeSearchTerm(productName);
+  const term = normalizeSearchTerm(productName) || normalizeSearchTerm(barcode);
   const query = encodeURIComponent(term);
   return {
     term,

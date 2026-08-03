@@ -8,9 +8,10 @@ import {
   judgePurchase,
   normalizeSettings,
   toNonNegative,
-} from "./calculator.js?v=7";
-import { BarcodeScanner, PriceTagScanner, normalizeBarcode } from "./scanner.js?v=7";
-import { StorageRepository, itemsToCsv } from "./storage.js?v=7";
+} from "./calculator.js?v=9";
+import { BarcodeScanner, PriceTagScanner, normalizeBarcode } from "./scanner.js?v=9";
+import { StorageRepository, itemsToCsv } from "./storage.js?v=9";
+import { isBookIsbn, lookupBookByIsbn } from "./product-lookup.js?v=9";
 
 const byId = (id) => document.getElementById(id);
 const elements = {
@@ -62,6 +63,7 @@ const elements = {
   cancelPurchasePriceButton: byId("cancelPurchasePriceButton"),
   storeNameInput: byId("storeNameInput"),
   productNameInput: byId("productNameInput"),
+  productLookupStatus: byId("productLookupStatus"),
   searchHint: byId("searchHint"),
   marketScreenshotButton: byId("marketScreenshotButton"),
   marketScreenshotInput: byId("marketScreenshotInput"),
@@ -85,6 +87,14 @@ const elements = {
   maximumResult: byId("maximumResult"),
   marketCountResult: byId("marketCountResult"),
   salePriceInput: byId("salePriceInput"),
+  numberInputDialog: byId("numberInputDialog"),
+  numberInputDialogForm: byId("numberInputDialogForm"),
+  numberInputDialogHeading: byId("numberInputDialogHeading"),
+  numberInputLabel: byId("numberInputLabel"),
+  numberInputEditor: byId("numberInputEditor"),
+  generalNumberKeypad: byId("generalNumberKeypad"),
+  decimalKeyButton: byId("decimalKeyButton"),
+  cancelNumberInputButton: byId("cancelNumberInputButton"),
   soldCountInput: byId("soldCountInput"),
   activeCountInput: byId("activeCountInput"),
   recentSaleDateInput: byId("recentSaleDateInput"),
@@ -145,6 +155,9 @@ let lastRestoredBarcode = "";
 let tutorialStep = 0;
 let toastTimer = 0;
 let waitingWorker = null;
+let numberInputTarget = null;
+let productLookupController = null;
+let lastProductLookupBarcode = "";
 
 function setMessage(element, message) {
   element.textContent = message;
@@ -261,10 +274,7 @@ function openPurchasePriceEditor() {
   } else {
     elements.purchasePriceDialog.setAttribute("open", "");
   }
-  window.setTimeout(() => {
-    elements.purchasePriceEditor.focus();
-    elements.purchasePriceEditor.select();
-  }, 50);
+  window.setTimeout(() => elements.purchasePriceDialog.querySelector("[data-number-key]")?.focus(), 50);
 }
 
 function closePurchasePriceEditor() {
@@ -273,7 +283,10 @@ function closePurchasePriceEditor() {
 }
 
 function applyPurchasePrice() {
-  if (!elements.purchasePriceEditor.reportValidity()) return false;
+  if (elements.purchasePriceEditor.value === "") {
+    showToast("画面の数字ボタンで仕入価格を入力してください");
+    return false;
+  }
   elements.purchasePriceInput.value = String(Math.round(toNonNegative(elements.purchasePriceEditor.value)));
   syncPurchasePriceDisplay();
   renderCalculation();
@@ -343,14 +356,14 @@ function openMarketPriceEditor(index = null) {
   elements.marketPriceEditor.value = editing ? values[index] : "";
   if (typeof elements.marketPriceDialog.showModal === "function") elements.marketPriceDialog.showModal();
   else elements.marketPriceDialog.setAttribute("open", "");
-  window.setTimeout(() => {
-    elements.marketPriceEditor.focus();
-    elements.marketPriceEditor.select();
-  }, 50);
+  window.setTimeout(() => elements.marketPriceDialog.querySelector("[data-number-key]")?.focus(), 50);
 }
 
 function applyMarketPrice() {
-  if (!elements.marketPriceEditor.reportValidity()) return false;
+  if (toNonNegative(elements.marketPriceEditor.value) <= 0) {
+    showToast("画面の数字ボタンで売れた価格を入力してください");
+    return false;
+  }
   const value = String(Math.round(toNonNegative(elements.marketPriceEditor.value)));
   const values = marketPriceValues();
   if (editingMarketPriceIndex === null) values.push(value);
@@ -366,9 +379,85 @@ function applyMarketPrice() {
   } else {
     elements.marketPriceEditor.value = "";
     elements.marketPriceDialogStatus.textContent = `追加済み ${values.length}/5件。続けて入力できます。`;
-    elements.marketPriceEditor.focus();
+    elements.marketPriceDialog.querySelector("[data-number-key]")?.focus();
   }
   return true;
+}
+
+function updateNumberEditor(editor, key) {
+  const current = editor.value;
+  if (key === "clear") editor.value = "";
+  else if (key === "backspace") editor.value = current.slice(0, -1);
+  else if (key === "decimal") {
+    if (editor.dataset.allowDecimal === "true" && !current.includes(".")) editor.value = current ? `${current}.` : "0.";
+  } else if (/^\d$/.test(key)) {
+    const digitCount = current.replace(/\D/g, "").length;
+    if (digitCount >= 9) return;
+    editor.value = current === "0" ? key : `${current}${key}`;
+  }
+}
+
+function inputDisplayName(input) {
+  return input.closest("label")?.querySelector("span")?.textContent?.replace(/必須/g, "").trim()
+    || input.getAttribute("aria-label")
+    || "数字";
+}
+
+function closeNumberInputEditor() {
+  numberInputTarget = null;
+  if (typeof elements.numberInputDialog.close === "function") elements.numberInputDialog.close();
+  else elements.numberInputDialog.removeAttribute("open");
+}
+
+function openNumberInputEditor(input) {
+  numberInputTarget = input;
+  const allowDecimal = String(input.step).includes(".") || input.inputMode === "decimal";
+  elements.numberInputDialogHeading.textContent = inputDisplayName(input);
+  elements.numberInputLabel.textContent = "下の数字ボタンで入力";
+  elements.numberInputEditor.value = input.value;
+  elements.numberInputEditor.dataset.allowDecimal = String(allowDecimal);
+  elements.decimalKeyButton.hidden = !allowDecimal;
+  if (typeof elements.numberInputDialog.showModal === "function") elements.numberInputDialog.showModal();
+  else elements.numberInputDialog.setAttribute("open", "");
+  window.setTimeout(() => elements.generalNumberKeypad.querySelector("[data-number-key]")?.focus(), 50);
+}
+
+function applyNumberInput() {
+  if (!numberInputTarget) return false;
+  const raw = elements.numberInputEditor.value;
+  let value = raw;
+  if (raw !== "") {
+    let numeric = Number(raw);
+    if (!Number.isFinite(numeric)) return false;
+    const minimum = Number(numberInputTarget.min);
+    const maximum = Number(numberInputTarget.max);
+    if (numberInputTarget.min !== "" && Number.isFinite(minimum)) numeric = Math.max(minimum, numeric);
+    if (numberInputTarget.max !== "" && Number.isFinite(maximum)) numeric = Math.min(maximum, numeric);
+    const allowDecimal = String(numberInputTarget.step).includes(".") || numberInputTarget.inputMode === "decimal";
+    value = String(allowDecimal ? numeric : Math.round(numeric));
+  }
+  const target = numberInputTarget;
+  target.value = value;
+  closeNumberInputEditor();
+  target.dispatchEvent(new Event("input", { bubbles: true }));
+  target.dispatchEvent(new Event("change", { bubbles: true }));
+  if (navigator.vibrate) navigator.vibrate(20);
+  return true;
+}
+
+function enableScreenNumberInputs() {
+  document.querySelectorAll('input[type="number"]').forEach((input) => {
+    input.readOnly = true;
+    input.inputMode = "none";
+    input.dataset.screenNumber = "true";
+    input.setAttribute("aria-haspopup", "dialog");
+    input.addEventListener("click", () => openNumberInputEditor(input));
+    input.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      openNumberInputEditor(input);
+    });
+  });
 }
 
 function removeMarketPrice(index) {
@@ -406,6 +495,44 @@ function updateSearchLinks() {
   elements.searchHint.textContent = currentSearchUrls.term
     ? `「${currentSearchUrls.term}」で検索します。`
     : "先にJANコードまたは商品名を入力してください。";
+}
+
+async function fillProductNameFromBarcode(code) {
+  const normalized = normalizeBarcode(code);
+  if (!isBookIsbn(normalized)) {
+    if (normalized.length >= 8 && !elements.productNameInput.value) {
+      setMessage(elements.productLookupStatus, "一般商品は商品名を入力してください。検索では商品名を優先します。");
+    }
+    return false;
+  }
+  if (elements.productNameInput.value) {
+    setMessage(elements.productLookupStatus, "入力済みの商品名を検索に使います。");
+    return false;
+  }
+  if (normalized === lastProductLookupBarcode) return false;
+  lastProductLookupBarcode = normalized;
+  productLookupController?.abort();
+  productLookupController = new AbortController();
+  setMessage(elements.productLookupStatus, "本の商品名を取得しています…");
+  try {
+    const book = await lookupBookByIsbn(normalized, { signal: productLookupController.signal });
+    if (normalizeBarcode(elements.barcodeInput.value) !== normalized || elements.productNameInput.value) return false;
+    if (!book) {
+      setMessage(elements.productLookupStatus, "このISBNの商品名は見つかりませんでした。手入力してください。");
+      return false;
+    }
+    elements.productNameInput.value = book.title;
+    updateSearchLinks();
+    setMessage(elements.productLookupStatus, `商品名を自動入力しました：${book.title}`);
+    showToast("本の商品名を自動入力しました");
+    return true;
+  } catch (error) {
+    if (error?.name !== "AbortError") {
+      lastProductLookupBarcode = "";
+      setMessage(elements.productLookupStatus, "商品名を取得できませんでした。手入力はそのまま使えます。");
+    }
+    return false;
+  }
 }
 
 function restoreSavedMarket(code) {
@@ -455,6 +582,7 @@ const barcodeScanner = new BarcodeScanner({
     elements.barcodeInput.value = code;
     updateSearchLinks();
     restoreSavedMarket(code);
+    void fillProductNameFromBarcode(code);
     elements.scanSuccess.hidden = false;
     window.setTimeout(() => { elements.scanSuccess.hidden = true; }, 900);
     showToast(`バーコード ${code} を読み取りました`);
@@ -633,6 +761,9 @@ function clearProductForm() {
   syncPurchasePriceDisplay();
   elements.salePriceInput.value = "";
   lastRestoredBarcode = "";
+  lastProductLookupBarcode = "";
+  productLookupController?.abort();
+  setMessage(elements.productLookupStatus, "本のISBNはスキャン後に商品名を自動取得します。");
   elements.marketPriceInputs.forEach((input) => { input.value = ""; });
   elements.soldCountInput.value = "";
   elements.activeCountInput.value = "";
@@ -658,7 +789,7 @@ function saveCurrentItem() {
   }
   if (!elements.salePriceInput.reportValidity() || toNonNegative(elements.salePriceInput.value) <= 0) {
     showToast("想定売却価格を入力してください");
-    elements.salePriceInput.focus();
+    openNumberInputEditor(elements.salePriceInput);
     return;
   }
 
@@ -798,6 +929,19 @@ function closeTutorial() {
 }
 
 function registerEvents() {
+  enableScreenNumberInputs();
+  document.addEventListener("click", (event) => {
+    const keyButton = event.target.closest("[data-number-key]");
+    if (!keyButton) return;
+    const keypad = keyButton.closest("[data-keypad-for]");
+    const editor = keypad ? byId(keypad.dataset.keypadFor) : null;
+    if (editor) updateNumberEditor(editor, keyButton.dataset.numberKey);
+  });
+  elements.cancelNumberInputButton.addEventListener("click", closeNumberInputEditor);
+  elements.numberInputDialogForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    applyNumberInput();
+  });
   elements.copyAppUrlButton.addEventListener("click", copyPublicUrl);
   elements.startScanButton.addEventListener("click", async () => {
     closePriceScanner();
@@ -815,8 +959,14 @@ function registerEvents() {
     elements.barcodeInput.value = normalizeBarcode(elements.barcodeInput.value);
     updateSearchLinks();
     restoreSavedMarket(elements.barcodeInput.value);
+    void fillProductNameFromBarcode(elements.barcodeInput.value);
   });
-  elements.productNameInput.addEventListener("input", updateSearchLinks);
+  elements.productNameInput.addEventListener("input", () => {
+    updateSearchLinks();
+    setMessage(elements.productLookupStatus, elements.productNameInput.value
+      ? "この商品名を優先して検索します。"
+      : "本のISBNはスキャン後に商品名を自動取得します。");
+  });
   document.querySelectorAll("[data-search]").forEach((link) => {
     link.addEventListener("click", (event) => {
       if (link.getAttribute("aria-disabled") === "true") event.preventDefault();
