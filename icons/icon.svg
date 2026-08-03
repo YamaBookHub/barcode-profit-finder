@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="バーコード利益チェッカー">
+  <rect width="512" height="512" rx="112" fill="#0d766e"/>
+  <rect x="76" y="108" width="360" height="218" rx="30" fill="#ffffff"/>
+  <g fill="#17322f">
+    <rect x="108" y="142" width="12" height="128" rx="3"/>
+    <rect x="130" y="142" width="23" height="128" rx="3"/>
+    <rect x="165" y="142" width="10" height="128" rx="3"/>
+    <rect x="188" y="142" width="17" height="128" rx="3"/>
+    <rect x="216" y="142" width="9" height="128" rx="3"/>
+    <rect x="237" y="142" width="28" height="128" rx="3"/>
+    <rect x="276" y="142" width="11" height="128" rx="3"/>
+    <rect x="299" y="142" width="20" height="128" rx="3"/>
+    <rect x="331" y="142" width="9" height="128" rx="3"/>
+    <rect x="352" y="142" width="27" height="128" rx="3"/>
+    <rect x="390" y="142" width="12" height="128" rx="3"/>
+  </g>
+  <path d="M126 381h260" fill="none" stroke="#ffffff" stroke-linecap="round" stroke-width="48"/>
+  <path d="m286 348 36 33-36 33" fill="none" stroke="#0d766e" stroke-linecap="round" stroke-linejoin="round" stroke-width="18"/>
+  <circle cx="210" cy="381" r="38" fill="#ffcf5a"/>
+  <path d="M210 360v42m-15-31h27c9 0 14 5 14 12s-5 12-14 12h-27" fill="none" stroke="#17322f" stroke-linecap="round" stroke-linejoin="round" stroke-width="10"/>
+</svg>

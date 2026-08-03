@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#0d766e">
+    <meta name="description" content="バーコードを読み取り、仕入価格と売却相場から利益・利益率・ROI・仕入判定をすぐ確認できる店舗仕入れ支援ツールです。">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="利益チェッカー">
+    <meta name="format-detection" content="telephone=no">
+    <title>バーコード利益チェッカー</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
+    <link rel="stylesheet" href="style.css">
+    <script src="vendor/zxing-browser.min.js" defer></script>
+    <script type="module" src="app.js"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">本文へ移動</a>
+
+    <header class="app-header">
+      <div>
+        <p class="eyebrow">店舗仕入れの即決ツール</p>
+        <h1>バーコード利益チェッカー</h1>
+      </div>
+      <button id="settingsOpenButton" class="icon-button" type="button" aria-label="判定設定を開く" aria-controls="settingsPanel" aria-expanded="false">
+        <span aria-hidden="true">⚙︎</span>
+        <span>判定設定</span>
+      </button>
+    </header>
+
+    <aside id="resultHero" class="result-hero is-empty" aria-live="polite" aria-atomic="true">
+      <div>
+        <p class="result-kicker">いまの仕入判定</p>
+        <p id="heroVerdict" class="hero-verdict">価格を入力してください</p>
+      </div>
+      <div class="hero-numbers">
+        <p><span>予想利益</span><strong id="heroProfit">―</strong></p>
+        <p><span>ROI</span><strong id="heroRoi">―</strong></p>
+      </div>
+    </aside>
+
+    <main id="main" class="app-main">
+      <section id="settingsPanel" class="settings-panel card" hidden>
+        <div class="section-title-row">
+          <div>
+            <p class="step-label">設定</p>
+            <h2>仕入判定の基準</h2>
+          </div>
+          <button id="settingsCloseButton" class="text-button" type="button">閉じる</button>
+        </div>
+        <p class="help-text">「仕入候補」は利益とROIの両方を満たしたとき、「要確認」は利益基準を満たしたときに表示します。</p>
+        <form id="settingsForm" class="form-grid">
+          <label>
+            <span>仕入候補にする利益</span>
+            <span class="input-with-unit"><input id="candidateProfitInput" type="number" min="0" step="100" inputmode="numeric" required><span>円以上</span></span>
+          </label>
+          <label>
+            <span>仕入候補にするROI</span>
+            <span class="input-with-unit"><input id="candidateRoiInput" type="number" min="0" step="1" inputmode="decimal" required><span>%以上</span></span>
+          </label>
+          <label>
+            <span>要確認にする利益</span>
+            <span class="input-with-unit"><input id="reviewProfitInput" type="number" min="0" step="100" inputmode="numeric" required><span>円以上</span></span>
+          </label>
+          <div class="button-row full-width">
+            <button class="primary-button" type="submit">設定を保存</button>
+            <button id="settingsResetButton" class="secondary-button" type="button">初期値に戻す</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="card scanner-card" aria-labelledby="scanHeading">
+        <div class="section-heading">
+          <p class="step-label"><span>1</span> スキャン</p>
+          <h2 id="scanHeading">商品のバーコードを読む</h2>
+          <p>横線がバーコード全体に重なるよう、カメラをゆっくり近づけてください。</p>
+          <p class="camera-privacy">写真は撮影・保存しません。ライブ映像を端末内で読み取るため、シャッター音は鳴りません。</p>
+        </div>
+
+        <div id="cameraFrame" class="camera-frame">
+          <video id="cameraVideo" muted playsinline aria-label="バーコード読取用カメラ"></video>
+          <div class="scan-guide" aria-hidden="true">
+            <span></span>
+          </div>
+          <p id="cameraPlaceholder" class="camera-placeholder">「カメラを開始」を押してください</p>
+          <p id="scanSuccess" class="scan-success" hidden>✓ 読み取りました</p>
+        </div>
+
+        <p id="cameraStatus" class="status-message" role="status">カメラは停止中です</p>
+        <div id="cameraError" class="error-message" role="alert" hidden></div>
+
+        <div class="camera-controls">
+          <button id="startScanButton" class="primary-button" type="button">カメラを開始</button>
+          <button id="stopScanButton" class="secondary-button" type="button" disabled>停止</button>
+          <button id="rescanButton" class="secondary-button" type="button">再スキャン</button>
+        </div>
+
+        <label class="field-block barcode-field" for="barcodeInput">
+          <span>JANコード／バーコード</span>
+          <input id="barcodeInput" name="barcode" type="text" inputmode="text" enterkeyhint="done" autocapitalize="characters" autocomplete="off" placeholder="例：4901234567894">
+          <small>カメラが使えない場合は手入力できます。CODE-128の英数字にも対応します。</small>
+        </label>
+      </section>
+
+      <section class="card" aria-labelledby="searchHeading">
+        <div class="section-heading">
+          <p class="step-label"><span>2</span> 相場確認</p>
+          <h2 id="searchHeading">販売相場を調べる</h2>
+          <p>入力したバーコードで各サイトの検索画面を開きます。</p>
+        </div>
+        <div id="searchLinks" class="search-grid">
+          <a data-search="google" class="search-button" href="#" target="_blank" rel="noopener noreferrer" aria-disabled="true">Google商品検索 <span aria-hidden="true">↗</span></a>
+          <a data-search="mercari" class="search-button" href="#" target="_blank" rel="noopener noreferrer" aria-disabled="true">メルカリ検索 <span aria-hidden="true">↗</span></a>
+          <a data-search="mercariSold" class="search-button" href="#" target="_blank" rel="noopener noreferrer" aria-disabled="true">メルカリ売り切れ相場 <span aria-hidden="true">↗</span></a>
+          <a data-search="surugaya" class="search-button" href="#" target="_blank" rel="noopener noreferrer" aria-disabled="true">駿河屋検索 <span aria-hidden="true">↗</span></a>
+          <a data-search="yahooFlea" class="search-button" href="#" target="_blank" rel="noopener noreferrer" aria-disabled="true">Yahoo!フリマ検索 <span aria-hidden="true">↗</span></a>
+          <a data-search="yahooAuction" class="search-button" href="#" target="_blank" rel="noopener noreferrer" aria-disabled="true">Yahoo!オークション落札相場 <span aria-hidden="true">↗</span></a>
+        </div>
+        <p id="searchHint" class="inline-hint">先にバーコードを読み取るか入力してください。</p>
+      </section>
+
+      <section class="card" aria-labelledby="priceHeading">
+        <div class="section-heading">
+          <p class="step-label"><span>3</span> 価格入力</p>
+          <h2 id="priceHeading">仕入れと販売の条件を入れる</h2>
+          <p>入力するたびに利益と判定を更新します。</p>
+        </div>
+
+        <form id="profitForm" class="form-grid" autocomplete="off">
+          <label class="full-width">
+            <span>商品名</span>
+            <input id="productNameInput" type="text" enterkeyhint="next" placeholder="例：ワイヤレスイヤホン">
+          </label>
+          <label>
+            <span>仕入価格 <em>必須</em></span>
+            <span class="input-with-unit"><input id="purchasePriceInput" type="number" min="0" step="1" inputmode="numeric" placeholder="0" required><span>円</span></span>
+          </label>
+          <label>
+            <span>想定売却価格 <em>必須</em></span>
+            <span class="input-with-unit"><input id="salePriceInput" type="number" min="0" step="1" inputmode="numeric" placeholder="0" required><span>円</span></span>
+          </label>
+          <label>
+            <span>販売手数料率</span>
+            <span class="input-with-unit"><input id="feeRateInput" type="number" min="0" max="100" step="0.1" inputmode="decimal" value="10"><span>%</span></span>
+          </label>
+          <label>
+            <span>送料</span>
+            <span class="input-with-unit"><input id="shippingInput" type="number" min="0" step="1" inputmode="numeric" value="0"><span>円</span></span>
+          </label>
+          <label>
+            <span>梱包費</span>
+            <span class="input-with-unit"><input id="packagingInput" type="number" min="0" step="1" inputmode="numeric" value="0"><span>円</span></span>
+          </label>
+          <label>
+            <span>その他経費</span>
+            <span class="input-with-unit"><input id="otherCostsInput" type="number" min="0" step="1" inputmode="numeric" value="0"><span>円</span></span>
+          </label>
+        </form>
+      </section>
+
+      <section id="calculationSection" class="card calculation-card" aria-labelledby="resultHeading">
+        <div class="section-heading">
+          <p class="step-label"><span>4</span> 判定</p>
+          <h2 id="resultHeading">利益の内訳</h2>
+        </div>
+        <dl class="result-grid">
+          <div><dt>販売手数料</dt><dd id="feeResult">0円</dd></div>
+          <div><dt>手取り額</dt><dd id="netResult">0円</dd></div>
+          <div class="emphasis"><dt>予想利益</dt><dd id="profitResult">0円</dd></div>
+          <div><dt>利益率</dt><dd id="marginResult">―</dd></div>
+          <div><dt>ROI（仕入効率）</dt><dd id="roiResult">―</dd></div>
+          <div><dt>損益分岐売価</dt><dd id="breakEvenResult">0円</dd></div>
+        </dl>
+        <p class="formula-note">利益率＝利益÷売価、ROI＝利益÷仕入価格で計算。手数料は1円未満を切り捨てます。</p>
+        <div class="save-actions">
+          <button id="saveItemButton" class="primary-button" type="button">この商品を保存</button>
+          <button id="cancelEditButton" class="secondary-button" type="button" hidden>編集をキャンセル</button>
+        </div>
+      </section>
+
+      <section class="card saved-card" aria-labelledby="savedHeading">
+        <div class="section-title-row">
+          <div class="section-heading compact">
+            <p class="step-label">保存</p>
+            <h2 id="savedHeading">保存した商品</h2>
+          </div>
+          <button id="exportCsvButton" class="secondary-button small-button" type="button" disabled>CSV出力</button>
+        </div>
+        <p id="savedSummary" class="saved-summary">保存した商品はありません。</p>
+        <div id="savedItemsList" class="saved-list"></div>
+      </section>
+
+      <section class="privacy-note" aria-label="利用上の注意">
+        <h2>安心して使うために</h2>
+        <p>カメラ映像はバーコード読取だけに使い、写真の撮影・保存・送信はしません。入力データはこのブラウザ内だけに保存します。各販売サイトは検索画面を開くだけで、自動ログイン・購入・出品・スクレイピングは行いません。</p>
+      </section>
+    </main>
+
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+    <footer class="app-footer">
+      <p>Barcode Profit Finder</p>
+      <p>店舗では通信状況と実際の販売条件もあわせて確認してください。</p>
+    </footer>
+
+    <noscript>このアプリを使うにはJavaScriptを有効にしてください。</noscript>
+  </body>
+</html>

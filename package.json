@@ -1,0 +1,10 @@
+{
+  "name": "barcode-profit-finder",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "check": "npm test && node --check app.js && node --check service-worker.js"
+  }
+}
