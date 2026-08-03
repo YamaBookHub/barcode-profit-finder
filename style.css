@@ -175,6 +175,12 @@ a[aria-disabled="true"] {
   display: none;
 }
 
+.result-hero.is-empty {
+  border-color: #9a5b00;
+  background: #fff4d8;
+  color: #422700;
+}
+
 .result-hero.is-candidate,
 .result-hero.is-strong {
   border-color: #045b3b;
@@ -976,6 +982,20 @@ textarea:focus {
   font-weight: 850;
 }
 
+.required-badge {
+  display: inline-block;
+  margin-right: 0.45rem;
+  padding: 0.18rem 0.48rem;
+  border-radius: 999px;
+  background: #9c2432;
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 950;
+  line-height: 1.2;
+  letter-spacing: 0.03em;
+  vertical-align: 0.12em;
+}
+
 .price-entry-button strong {
   font-size: clamp(1.25rem, 6vw, 1.65rem);
   font-weight: 950;
@@ -986,6 +1006,13 @@ textarea:focus {
   border-color: #045b3b;
   background: #087d50;
   color: #fff;
+}
+
+.price-entry-button.is-required-missing {
+  border-color: #9a5b00;
+  background: #fff4d8;
+  color: #422700;
+  box-shadow: 0 7px 20px rgb(154 91 0 / 18%);
 }
 
 .scan-price-button {
@@ -1358,11 +1385,16 @@ input[data-screen-number] {
   font-size: clamp(1rem, 5vw, 1.35rem);
 }
 
-.sale-price-field {
-  padding: 0.8rem;
-  border: 2px solid var(--primary);
-  border-radius: 15px;
-  background: var(--surface-soft);
+.sale-price-entry-button {
+  margin-top: 1rem;
+}
+
+.required-helper {
+  margin: 0.45rem 0 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1.45;
 }
 
 .turnover-panel {

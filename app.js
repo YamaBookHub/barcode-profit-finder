@@ -8,11 +8,11 @@ import {
   judgePurchase,
   normalizeSettings,
   toNonNegative,
-} from "./calculator.js?v=11";
-import { BarcodeScanner, PriceTagScanner, normalizeBarcode } from "./scanner.js?v=11";
-import { StorageRepository, itemsToCsv } from "./storage.js?v=11";
-import { isBookIsbn, lookupBookByIsbn } from "./product-lookup.js?v=11";
-import { parseSpokenNumber, speechErrorMessage, speechRecognitionConstructor } from "./voice-input.js?v=11";
+} from "./calculator.js?v=12";
+import { BarcodeScanner, PriceTagScanner, normalizeBarcode } from "./scanner.js?v=12";
+import { StorageRepository, itemsToCsv } from "./storage.js?v=12";
+import { isBookIsbn, lookupBookByIsbn } from "./product-lookup.js?v=12";
+import { parseSpokenNumber, speechErrorMessage, speechRecognitionConstructor } from "./voice-input.js?v=12";
 
 const byId = (id) => document.getElementById(id);
 const elements = {
@@ -31,6 +31,7 @@ const elements = {
   reviewProfitInput: byId("reviewProfitInput"),
   highProfitVibrationInput: byId("highProfitVibrationInput"),
   resultHero: byId("resultHero"),
+  heroKicker: byId("heroKicker"),
   heroVerdict: byId("heroVerdict"),
   heroProfit: byId("heroProfit"),
   heroRoi: byId("heroRoi"),
@@ -87,6 +88,8 @@ const elements = {
   minimumResult: byId("minimumResult"),
   maximumResult: byId("maximumResult"),
   marketCountResult: byId("marketCountResult"),
+  openSalePriceButton: byId("openSalePriceButton"),
+  salePriceDisplay: byId("salePriceDisplay"),
   salePriceInput: byId("salePriceInput"),
   numberInputDialog: byId("numberInputDialog"),
   numberInputDialogForm: byId("numberInputDialogForm"),
@@ -293,7 +296,16 @@ function hasDecisionInputs() {
   return elements.purchasePriceInput.value !== "" && elements.salePriceInput.value !== "";
 }
 
+function missingDecisionInputs() {
+  const missing = [];
+  if (elements.purchasePriceInput.value === "") missing.push("仕入価格");
+  if (elements.salePriceInput.value === "") missing.push("売却価格");
+  return missing;
+}
+
 function renderCalculation() {
+  syncPurchasePriceDisplay();
+  syncSalePriceDisplay();
   currentCalculation = calculateProfit(valuesForCalculation());
   currentVerdict = judgePurchase(currentCalculation, settings);
   const verdict = VERDICTS[currentVerdict];
@@ -308,12 +320,15 @@ function renderCalculation() {
   elements.resultHero.className = "result-hero";
   if (hasDecisionInputs()) {
     elements.resultHero.classList.add(`is-${verdict.tone}`);
+    elements.heroKicker.textContent = "仕入判定";
     elements.heroVerdict.textContent = verdict.display;
     elements.heroProfit.textContent = formatCurrency(currentCalculation.profit);
     elements.heroRoi.textContent = formatPercent(currentCalculation.roi);
   } else {
+    const missing = missingDecisionInputs();
     elements.resultHero.classList.add("is-empty");
-    elements.heroVerdict.textContent = "価格を入力してください";
+    elements.heroKicker.textContent = "利益計算に必須";
+    elements.heroVerdict.textContent = `あと${missing.length}つ：${missing.join("・")}`;
     elements.heroProfit.textContent = "―";
     elements.heroRoi.textContent = "―";
   }
@@ -345,6 +360,16 @@ function syncPurchasePriceDisplay() {
     ? formatCurrency(toNonNegative(elements.purchasePriceInput.value))
     : "未入力";
   elements.openPurchasePriceButton.classList.toggle("has-value", hasPrice);
+  elements.openPurchasePriceButton.classList.toggle("is-required-missing", !hasPrice);
+}
+
+function syncSalePriceDisplay() {
+  const hasPrice = elements.salePriceInput.value !== "";
+  elements.salePriceDisplay.textContent = hasPrice
+    ? formatCurrency(toNonNegative(elements.salePriceInput.value))
+    : "未入力";
+  elements.openSalePriceButton.classList.toggle("has-value", hasPrice);
+  elements.openSalePriceButton.classList.toggle("is-required-missing", !hasPrice);
 }
 
 function openPurchasePriceEditor() {
@@ -965,7 +990,7 @@ function saveCurrentItem() {
     openPurchasePriceEditor();
     return;
   }
-  if (!elements.salePriceInput.reportValidity() || toNonNegative(elements.salePriceInput.value) <= 0) {
+  if (toNonNegative(elements.salePriceInput.value) <= 0) {
     showToast("想定売却価格を入力してください");
     openNumberInputEditor(elements.salePriceInput);
     return;
@@ -1192,6 +1217,7 @@ function registerEvents() {
   elements.closePriceScannerButton.addEventListener("click", closePriceScanner);
 
   elements.openPurchasePriceButton.addEventListener("click", openPurchasePriceEditor);
+  elements.openSalePriceButton.addEventListener("click", () => openNumberInputEditor(elements.salePriceInput));
   elements.cancelPurchasePriceButton.addEventListener("click", closePurchasePriceEditor);
   elements.purchasePriceDialogForm.addEventListener("submit", (event) => {
     event.preventDefault();

@@ -13,9 +13,9 @@
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
-    <link rel="stylesheet" href="style.css?v=11">
+    <link rel="stylesheet" href="style.css?v=12">
     <script src="vendor/zxing-browser.min.js" defer></script>
-    <script type="module" src="app.js?v=11"></script>
+    <script type="module" src="app.js?v=12"></script>
   </head>
   <body>
     <a class="skip-link" href="#main">本文へ移動</a>
@@ -37,8 +37,8 @@
 
     <aside id="resultHero" class="result-hero is-empty" aria-live="polite" aria-atomic="true">
       <div>
-        <p class="result-kicker">仕入判定</p>
-        <p id="heroVerdict" class="hero-verdict">価格を入力してください</p>
+        <p id="heroKicker" class="result-kicker">利益計算に必須</p>
+        <p id="heroVerdict" class="hero-verdict">あと2つ：仕入価格・売却価格</p>
       </div>
       <div class="hero-numbers">
         <p><span>予想利益</span><strong id="heroProfit">―</strong></p>
@@ -95,7 +95,7 @@
             <li>ほかのカメラアプリを閉じ、Safariを再起動します。</li>
           </ol>
           <button id="copyAppUrlButton" class="secondary-button" type="button">公開URLをコピー</button>
-          <a class="diagnostic-link" href="camera-test.html?v=11">カメラ端末診断を開く</a>
+          <a class="diagnostic-link" href="camera-test.html?v=12">カメラ端末診断を開く</a>
         </details>
         <div class="camera-controls">
           <button id="startScanButton" class="primary-button" type="button">カメラを開始</button>
@@ -115,8 +115,8 @@
           <h2 id="purchaseHeading">値札を読む、または価格を入力</h2>
           <p>OCR候補から選ぶか、数字を直接入力します。</p>
         </div>
-        <button id="openPurchasePriceButton" class="price-entry-button" type="button">
-          <span>仕入価格を入力</span>
+        <button id="openPurchasePriceButton" class="price-entry-button is-required-missing" type="button">
+          <span><b class="required-badge">必須 1/2</b>仕入価格</span>
           <strong id="purchasePriceDisplay">未入力</strong>
         </button>
         <input id="purchasePriceInput" type="hidden" value="">
@@ -248,7 +248,12 @@
           <div><dt>最高値</dt><dd id="maximumResult">―</dd></div>
           <div><dt>相場件数</dt><dd id="marketCountResult">0件</dd></div>
         </dl>
-        <label class="field-block sale-price-field"><span>想定売却価格 <em>必須</em></span><span class="input-with-unit"><input id="salePriceInput" type="number" min="0" step="1" inputmode="numeric" placeholder="中央値を自動反映" required><span>円</span></span></label>
+        <button id="openSalePriceButton" class="price-entry-button sale-price-entry-button is-required-missing" type="button" aria-describedby="salePriceHelp">
+          <span><b class="required-badge">必須 2/2</b>想定売却価格</span>
+          <strong id="salePriceDisplay">未入力</strong>
+        </button>
+        <input id="salePriceInput" type="hidden" value="" aria-label="想定売却価格">
+        <p id="salePriceHelp" class="required-helper">相場を入力すると中央値が自動で入ります。ここをタップして直接入力もできます。</p>
 
         <details class="turnover-panel">
           <summary>回転率も確認する <small>売れやすさの目安</small></summary>
@@ -376,7 +381,7 @@
 
     <footer class="app-footer">
       <p>Barcode Profit Finder</p>
-      <p>検索タブ対応 v11</p>
+      <p>必須入力強調 v12</p>
       <p>最終判断は商品の状態、需要、各サイトの規約も確認してください。</p>
     </footer>
     <noscript>このアプリを使うにはJavaScriptを有効にしてください。</noscript>

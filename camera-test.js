@@ -1,4 +1,4 @@
-import { CAMERA_CONSTRAINT_ATTEMPTS, isStandaloneDisplay } from "./scanner.js?v=11";
+import { CAMERA_CONSTRAINT_ATTEMPTS, isStandaloneDisplay } from "./scanner.js?v=12";
 
 const video = document.getElementById("diagnosticVideo");
 const runButton = document.getElementById("runDiagnosticButton");
@@ -60,7 +60,7 @@ async function runDiagnostic() {
   copyButton.disabled = true;
   status.textContent = "端末とカメラAPIを確認しています…";
 
-  addLine("診断バージョン", "v11");
+  addLine("診断バージョン", "v12");
   addLine("日時", new Date().toISOString());
   addLine("HTTPS", globalThis.isSecureContext);
   addLine("ホーム画面版", isStandaloneDisplay());
