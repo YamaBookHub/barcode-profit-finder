@@ -8,10 +8,11 @@ import {
   judgePurchase,
   normalizeSettings,
   toNonNegative,
-} from "./calculator.js?v=9";
-import { BarcodeScanner, PriceTagScanner, normalizeBarcode } from "./scanner.js?v=9";
-import { StorageRepository, itemsToCsv } from "./storage.js?v=9";
-import { isBookIsbn, lookupBookByIsbn } from "./product-lookup.js?v=9";
+} from "./calculator.js?v=11";
+import { BarcodeScanner, PriceTagScanner, normalizeBarcode } from "./scanner.js?v=11";
+import { StorageRepository, itemsToCsv } from "./storage.js?v=11";
+import { isBookIsbn, lookupBookByIsbn } from "./product-lookup.js?v=11";
+import { parseSpokenNumber, speechErrorMessage, speechRecognitionConstructor } from "./voice-input.js?v=11";
 
 const byId = (id) => document.getElementById(id);
 const elements = {
@@ -158,6 +159,10 @@ let waitingWorker = null;
 let numberInputTarget = null;
 let productLookupController = null;
 let lastProductLookupBarcode = "";
+let draftSaveTimer = 0;
+let marketSearchPending = false;
+let activeVoiceRecognition = null;
+let activeVoiceButton = null;
 
 function setMessage(element, message) {
   element.textContent = message;
@@ -169,6 +174,81 @@ function showToast(message, duration = 2400) {
   elements.toast.textContent = message;
   elements.toast.hidden = false;
   toastTimer = window.setTimeout(() => { elements.toast.hidden = true; }, duration);
+}
+
+function restoreVoiceButton(button) {
+  if (!button) return;
+  button.classList.remove("is-listening");
+  button.innerHTML = button.dataset.idleHtml || '<span aria-hidden="true">🎤</span> 音声入力';
+}
+
+function startVoiceInput(button) {
+  const Recognition = speechRecognitionConstructor(window);
+  if (!Recognition) {
+    showToast("このSafariでは音声入力を利用できません。画面キーパッドをお使いください。", 4200);
+    return;
+  }
+  if (activeVoiceRecognition && activeVoiceButton === button) {
+    activeVoiceRecognition.stop();
+    return;
+  }
+  activeVoiceRecognition?.abort();
+  barcodeScanner.stop("音声入力のためカメラを停止しました");
+  priceScanner.stop();
+
+  const target = byId(button.dataset.voiceTarget);
+  if (!target) return;
+  const recognition = new Recognition();
+  const mode = button.dataset.voiceMode;
+  button.dataset.idleHtml ||= button.innerHTML;
+  recognition.lang = "ja-JP";
+  recognition.continuous = false;
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 1;
+  recognition.onstart = () => {
+    activeVoiceRecognition = recognition;
+    activeVoiceButton = button;
+    button.classList.add("is-listening");
+    button.innerHTML = '<span aria-hidden="true">●</span> 聞いています…タップで終了';
+    if (navigator.vibrate) navigator.vibrate(20);
+  };
+  recognition.onresult = (event) => {
+    const transcript = String(event.results?.[0]?.[0]?.transcript ?? "").trim();
+    if (!transcript) return;
+    if (mode === "text") {
+      target.value = transcript;
+      target.dispatchEvent(new Event("input", { bubbles: true }));
+      target.dispatchEvent(new Event("change", { bubbles: true }));
+      showToast(`「${transcript}」と入力しました`, 3200);
+      return;
+    }
+    const allowDecimal = target === elements.numberInputEditor
+      && numberInputTarget
+      && (String(numberInputTarget.step).includes(".") || numberInputTarget.getAttribute("inputmode") === "decimal");
+    const parsed = parseSpokenNumber(transcript, { allowDecimal });
+    if (parsed === null) {
+      showToast(`「${transcript}」から数字を読み取れませんでした`, 3800);
+      return;
+    }
+    target.value = parsed;
+    showToast(`${numberFormatter.format(Number(parsed))} と入力しました。金額を確認してください`, 3200);
+  };
+  recognition.onerror = (event) => showToast(speechErrorMessage(event.error), 4400);
+  recognition.onend = () => {
+    restoreVoiceButton(button);
+    if (activeVoiceRecognition === recognition) {
+      activeVoiceRecognition = null;
+      activeVoiceButton = null;
+    }
+  };
+  try {
+    recognition.start();
+  } catch (error) {
+    restoreVoiceButton(button);
+    activeVoiceRecognition = null;
+    activeVoiceButton = null;
+    showToast(error?.message || "音声入力を開始できませんでした。", 4200);
+  }
 }
 
 async function copyPublicUrl() {
@@ -290,6 +370,7 @@ function applyPurchasePrice() {
   elements.purchasePriceInput.value = String(Math.round(toNonNegative(elements.purchasePriceEditor.value)));
   syncPurchasePriceDisplay();
   renderCalculation();
+  scheduleDraftSave();
   closePurchasePriceEditor();
   if (navigator.vibrate) navigator.vibrate(25);
   return true;
@@ -336,8 +417,10 @@ function renderMarketPriceList() {
 
 function closeMarketPriceEditor() {
   editingMarketPriceIndex = null;
+  marketSearchPending = false;
   if (typeof elements.marketPriceDialog.close === "function") elements.marketPriceDialog.close();
   else elements.marketPriceDialog.removeAttribute("open");
+  scheduleDraftSave();
 }
 
 function openMarketPriceEditor(index = null) {
@@ -372,6 +455,7 @@ function applyMarketPrice() {
   salePriceIsAutomatic = true;
   const wasEditing = editingMarketPriceIndex !== null;
   renderMarketStats();
+  scheduleDraftSave();
   if (navigator.vibrate) navigator.vibrate(25);
   if (wasEditing || values.length >= elements.marketPriceInputs.length) {
     closeMarketPriceEditor();
@@ -466,6 +550,7 @@ function removeMarketPrice(index) {
   elements.marketPriceInputs.forEach((input, inputIndex) => { input.value = values[inputIndex] ?? ""; });
   salePriceIsAutomatic = true;
   renderMarketStats();
+  scheduleDraftSave();
   showToast("相場価格を削除しました");
 }
 
@@ -523,6 +608,7 @@ async function fillProductNameFromBarcode(code) {
     }
     elements.productNameInput.value = book.title;
     updateSearchLinks();
+    scheduleDraftSave();
     setMessage(elements.productLookupStatus, `商品名を自動入力しました：${book.title}`);
     showToast("本の商品名を自動入力しました");
     return true;
@@ -563,6 +649,7 @@ function restoreSavedMarket(code) {
   const savedAt = new Date(previous.updatedAt || previous.savedAt);
   const savedLabel = Number.isNaN(savedAt.getTime()) ? "保存済み" : dateTimeFormatter.format(savedAt);
   setMessage(elements.marketOcrStatus, `${savedLabel}の相場を復元しました。現在の相場と大きく違わないか確認してください。`);
+  scheduleDraftSave();
   showToast("このJANの過去相場を自動で復元しました", 3600);
   return true;
 }
@@ -583,6 +670,7 @@ const barcodeScanner = new BarcodeScanner({
     updateSearchLinks();
     restoreSavedMarket(code);
     void fillProductNameFromBarcode(code);
+    scheduleDraftSave();
     elements.scanSuccess.hidden = false;
     window.setTimeout(() => { elements.scanSuccess.hidden = true; }, 900);
     showToast(`バーコード ${code} を読み取りました`);
@@ -638,6 +726,7 @@ async function readMarketScreenshot(file) {
   });
   salePriceIsAutomatic = true;
   const stats = renderMarketStats();
+  scheduleDraftSave();
   setMessage(elements.marketOcrStatus, `${stats.count}件を読み取りました。金額を確認し、違う候補は×で削除してください。`);
   showToast(`相場${stats.count}件と中央値を自動入力しました`, 3600);
 }
@@ -672,6 +761,7 @@ function renderPriceCandidates(candidates) {
       elements.purchasePriceInput.value = String(price);
       syncPurchasePriceDisplay();
       renderCalculation();
+      scheduleDraftSave();
       showToast(`${formatCurrency(price)}を仕入価格に設定しました`);
       closePriceScanner();
     });
@@ -717,6 +807,90 @@ function downloadFile(filename, type, content) {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+function draftValues() {
+  return {
+    editingId: editingId ?? "",
+    barcode: normalizeBarcode(elements.barcodeInput.value),
+    productName: elements.productNameInput.value,
+    purchasePrice: elements.purchasePriceInput.value,
+    salePrice: elements.salePriceInput.value,
+    feeRate: elements.feeRateInput.value,
+    shipping: elements.shippingInput.value,
+    packaging: elements.packagingInput.value,
+    otherCosts: elements.otherCostsInput.value,
+    storeName: elements.storeNameInput.value,
+    note: elements.noteInput.value,
+    marketPrices: elements.marketPriceInputs.map((input) => input.value),
+    soldCount: elements.soldCountInput.value,
+    activeCount: elements.activeCountInput.value,
+    recentSaleDate: elements.recentSaleDateInput.value,
+    checkedDate: elements.checkedDateInput.value,
+    salePriceIsAutomatic,
+    marketSearchPending,
+  };
+}
+
+function hasDraftContent(draft) {
+  return Boolean(
+    draft.editingId
+    || draft.barcode
+    || draft.productName.trim()
+    || draft.purchasePrice
+    || draft.salePrice
+    || draft.note.trim()
+    || draft.marketPrices.some(Boolean),
+  );
+}
+
+function saveDraftNow() {
+  window.clearTimeout(draftSaveTimer);
+  draftSaveTimer = 0;
+  const draft = draftValues();
+  return hasDraftContent(draft) ? repository.saveDraft(draft) : repository.clearDraft();
+}
+
+function scheduleDraftSave() {
+  window.clearTimeout(draftSaveTimer);
+  draftSaveTimer = window.setTimeout(saveDraftNow, 180);
+}
+
+function restoreDraft() {
+  const draft = repository.loadDraft();
+  if (!draft || !hasDraftContent(draft)) return false;
+  editingId = draft.editingId && items.some((item) => item.id === draft.editingId)
+    ? draft.editingId
+    : null;
+  elements.barcodeInput.value = draft.barcode;
+  elements.productNameInput.value = draft.productName;
+  elements.purchasePriceInput.value = draft.purchasePrice;
+  elements.salePriceInput.value = draft.salePrice;
+  elements.feeRateInput.value = draft.feeRate || "10";
+  elements.shippingInput.value = draft.shipping || "0";
+  elements.packagingInput.value = draft.packaging || "0";
+  elements.otherCostsInput.value = draft.otherCosts || "0";
+  elements.storeNameInput.value = draft.storeName;
+  elements.noteInput.value = draft.note;
+  elements.marketPriceInputs.forEach((input, index) => { input.value = draft.marketPrices[index] ?? ""; });
+  elements.soldCountInput.value = draft.soldCount;
+  elements.activeCountInput.value = draft.activeCount;
+  elements.recentSaleDateInput.value = draft.recentSaleDate;
+  elements.checkedDateInput.value = draft.checkedDate || localDateValue();
+  salePriceIsAutomatic = draft.salePriceIsAutomatic;
+  marketSearchPending = draft.marketSearchPending;
+  lastRestoredBarcode = draft.barcode;
+  lastProductLookupBarcode = draft.productName ? draft.barcode : "";
+  elements.saveItemButton.textContent = editingId ? "変更を保存" : "この商品を保存";
+  elements.cancelEditButton.hidden = !editingId;
+  setMessage(elements.productLookupStatus, draft.productName
+    ? "入力途中の商品名を復元しました。この商品名を優先して検索します。"
+    : "入力途中の内容を復元しました。");
+  syncPurchasePriceDisplay();
+  updateSearchLinks();
+  renderMarketStats({ updateSalePrice: false });
+  renderTurnover();
+  return true;
+}
+
 function currentItem(existing) {
   const now = new Date().toISOString();
   const marketStats = calculateMarketStats(elements.marketPriceInputs.map((input) => input.value));
@@ -754,7 +928,11 @@ function currentItem(existing) {
 }
 
 function clearProductForm() {
+  window.clearTimeout(draftSaveTimer);
+  draftSaveTimer = 0;
+  repository.clearDraft();
   editingId = null;
+  marketSearchPending = false;
   elements.barcodeInput.value = "";
   elements.productNameInput.value = "";
   elements.purchasePriceInput.value = "";
@@ -834,6 +1012,7 @@ function fillItemForm(item) {
   updateSearchLinks();
   renderMarketStats({ updateSalePrice: false });
   renderTurnover();
+  scheduleDraftSave();
 }
 
 function createMetric(label, value) {
@@ -930,6 +1109,11 @@ function closeTutorial() {
 
 function registerEvents() {
   enableScreenNumberInputs();
+  document.querySelectorAll("[data-voice-target]").forEach((button) => {
+    button.addEventListener("click", () => startVoiceInput(button));
+  });
+  document.addEventListener("input", scheduleDraftSave);
+  document.addEventListener("change", scheduleDraftSave);
   document.addEventListener("click", (event) => {
     const keyButton = event.target.closest("[data-number-key]");
     if (!keyButton) return;
@@ -969,7 +1153,26 @@ function registerEvents() {
   });
   document.querySelectorAll("[data-search]").forEach((link) => {
     link.addEventListener("click", (event) => {
-      if (link.getAttribute("aria-disabled") === "true") event.preventDefault();
+      if (link.getAttribute("aria-disabled") === "true") {
+        event.preventDefault();
+        return;
+      }
+      barcodeScanner.stop("相場検索のためカメラを停止しました");
+      priceScanner.stop();
+      event.preventDefault();
+      marketSearchPending = true;
+      saveDraftNow();
+      const searchTab = window.open("about:blank", "barcodeProfitMarketSearch");
+      if (searchTab) {
+        try { searchTab.opener = null; } catch { /* Safariでは設定できない場合があります */ }
+        searchTab.location.href = link.href;
+        openMarketPriceEditor();
+        elements.marketPriceDialogStatus.textContent = "検索タブから戻ったら、確認した売却価格を入力してください。";
+      } else {
+        marketSearchPending = false;
+        saveDraftNow();
+        showToast("検索タブを開けません。Safariのポップアップを許可してください", 4200);
+      }
     });
   });
 
@@ -1002,6 +1205,10 @@ function registerEvents() {
   });
   elements.openMarketPriceButton.addEventListener("click", () => openMarketPriceEditor());
   elements.finishMarketPriceButton.addEventListener("click", closeMarketPriceEditor);
+  elements.marketPriceDialog.addEventListener("cancel", () => {
+    marketSearchPending = false;
+    scheduleDraftSave();
+  });
   elements.marketPriceDialogForm.addEventListener("submit", (event) => {
     event.preventDefault();
     applyMarketPrice();
@@ -1099,14 +1306,29 @@ function registerEvents() {
   });
 
   window.addEventListener("pagehide", () => {
+    saveDraftNow();
+    activeVoiceRecognition?.abort();
     barcodeScanner.stop();
     priceScanner.terminate();
     marketImageReader.terminate();
   });
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) {
+      saveDraftNow();
       barcodeScanner.stop();
       priceScanner.stop();
+    } else if (marketSearchPending && !elements.marketPriceDialog.open) {
+      openMarketPriceEditor();
+      elements.marketPriceDialogStatus.textContent = "検索結果で確認した売却価格を入力してください。";
+    }
+  });
+  window.addEventListener("pageshow", () => {
+    if (!hasDraftContent(draftValues()) && restoreDraft()) {
+      showToast("入力途中の内容を復元しました");
+    }
+    if (marketSearchPending && !elements.marketPriceDialog.open) {
+      openMarketPriceEditor();
+      elements.marketPriceDialogStatus.textContent = "検索結果で確認した売却価格を入力してください。";
     }
   });
 }
@@ -1142,11 +1364,21 @@ function initialize() {
   elements.checkedDateInput.value = localDateValue();
   settingsToForm();
   registerEvents();
-  updateSearchLinks();
-  renderMarketStats();
-  renderTurnover();
+  const draftRestored = restoreDraft();
+  if (!draftRestored) {
+    updateSearchLinks();
+    renderMarketStats();
+    renderTurnover();
+  } else if (!elements.productNameInput.value) {
+    void fillProductNameFromBarcode(elements.barcodeInput.value);
+  }
   renderSavedItems();
   registerServiceWorker();
+  if (marketSearchPending) window.setTimeout(() => {
+    if (!elements.marketPriceDialog.open) openMarketPriceEditor();
+    elements.marketPriceDialogStatus.textContent = "検索結果で確認した売却価格を入力してください。";
+  }, 350);
+  if (draftRestored) window.setTimeout(() => showToast("検索前の入力内容を復元しました"), 300);
   if (!repository.hasSeenTutorial()) window.setTimeout(() => showTutorial(0), 250);
 }
 

@@ -3,6 +3,7 @@ import { DEFAULT_SETTINGS, normalizeSettings, toFiniteNumber, toNonNegative } fr
 export const STORAGE_KEYS = Object.freeze({
   items: "barcodeProfitFinder.items.v2",
   settings: "barcodeProfitFinder.settings.v2",
+  draft: "barcodeProfitFinder.draft.v1",
   tutorialSeen: "barcodeProfitFinder.tutorialSeen.v1",
   legacyItems: "barcodeProfitFinder.items.v1",
   legacySettings: "barcodeProfitFinder.settings.v1",
@@ -16,6 +17,12 @@ const ITEM_STRING_FIELDS = [
 const ITEM_NUMBER_FIELDS = [
   "purchasePrice", "salePrice", "feeRate", "shipping", "packaging", "otherCosts",
   "fee", "net", "profit", "margin", "roi", "breakEvenPrice", "soldCount", "activeCount",
+];
+
+const DRAFT_STRING_FIELDS = [
+  "editingId", "barcode", "productName", "purchasePrice", "salePrice", "feeRate",
+  "shipping", "packaging", "otherCosts", "storeName", "note", "soldCount",
+  "activeCount", "recentSaleDate", "checkedDate", "updatedAt",
 ];
 
 function safeString(value, maxLength = 5000) {
@@ -40,6 +47,21 @@ export function normalizeStoredItem(item = {}) {
     ? null
     : toFiniteNumber(item.turnoverScore, 0);
   normalized.turnoverLabel = safeString(item.turnoverLabel, 100);
+  return normalized;
+}
+
+export function normalizeDraft(draft = {}) {
+  if (!draft || typeof draft !== "object" || Array.isArray(draft)) return null;
+  const normalized = {};
+  DRAFT_STRING_FIELDS.forEach((field) => {
+    const maxLength = field === "note" ? 5000 : 1000;
+    normalized[field] = safeString(draft[field], maxLength);
+  });
+  normalized.marketPrices = Array.isArray(draft.marketPrices)
+    ? draft.marketPrices.slice(0, 5).map((value) => safeString(value, 20))
+    : [];
+  normalized.salePriceIsAutomatic = Boolean(draft.salePriceIsAutomatic);
+  normalized.marketSearchPending = Boolean(draft.marketSearchPending);
   return normalized;
 }
 
@@ -91,6 +113,31 @@ export class StorageRepository {
 
   saveSettings(settings) {
     return this.write(STORAGE_KEYS.settings, normalizeSettings(settings));
+  }
+
+  loadDraft(maxAgeMs = 24 * 60 * 60 * 1000) {
+    const normalized = normalizeDraft(this.read(STORAGE_KEYS.draft, null));
+    if (!normalized) return null;
+    const updatedAt = Date.parse(normalized.updatedAt);
+    if (!Number.isFinite(updatedAt) || Date.now() - updatedAt > maxAgeMs) {
+      this.clearDraft();
+      return null;
+    }
+    return normalized;
+  }
+
+  saveDraft(draft) {
+    const normalized = normalizeDraft({ ...draft, updatedAt: new Date().toISOString() });
+    return normalized ? this.write(STORAGE_KEYS.draft, normalized) : false;
+  }
+
+  clearDraft() {
+    try {
+      this.storage?.removeItem(STORAGE_KEYS.draft);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   hasSeenTutorial() {

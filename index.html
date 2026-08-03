@@ -13,9 +13,9 @@
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
-    <link rel="stylesheet" href="style.css?v=9">
+    <link rel="stylesheet" href="style.css?v=11">
     <script src="vendor/zxing-browser.min.js" defer></script>
-    <script type="module" src="app.js?v=9"></script>
+    <script type="module" src="app.js?v=11"></script>
   </head>
   <body>
     <a class="skip-link" href="#main">本文へ移動</a>
@@ -95,7 +95,7 @@
             <li>ほかのカメラアプリを閉じ、Safariを再起動します。</li>
           </ol>
           <button id="copyAppUrlButton" class="secondary-button" type="button">公開URLをコピー</button>
-          <a class="diagnostic-link" href="camera-test.html?v=9">カメラ端末診断を開く</a>
+          <a class="diagnostic-link" href="camera-test.html?v=11">カメラ端末診断を開く</a>
         </details>
         <div class="camera-controls">
           <button id="startScanButton" class="primary-button" type="button">カメラを開始</button>
@@ -154,6 +154,7 @@
               <span>仕入価格</span>
               <span class="input-with-unit"><input id="purchasePriceEditor" type="text" inputmode="none" placeholder="0" readonly aria-live="polite"><span>円</span></span>
             </label>
+            <button class="voice-input-button" type="button" data-voice-target="purchasePriceEditor" data-voice-mode="number"><span aria-hidden="true">🎤</span> 金額を話す</button>
             <div class="number-keypad" data-keypad-for="purchasePriceEditor" aria-label="仕入価格の数字入力">
               <button type="button" data-number-key="1">1</button><button type="button" data-number-key="2">2</button><button type="button" data-number-key="3">3</button>
               <button type="button" data-number-key="4">4</button><button type="button" data-number-key="5">5</button><button type="button" data-number-key="6">6</button>
@@ -175,18 +176,19 @@
           <p>商品名があれば商品名で検索します。未入力のときだけJANコードを使います。</p>
         </div>
         <label class="field-block" for="productNameInput"><span>商品名（検索はこちらを優先）</span><input id="productNameInput" type="text" enterkeyhint="next" placeholder="例：ワイヤレスイヤホン"></label>
+        <button class="voice-input-button product-voice-button" type="button" data-voice-target="productNameInput" data-voice-mode="text"><span aria-hidden="true">🎤</span> 商品名を話す</button>
         <p id="productLookupStatus" class="inline-hint" role="status">本のISBNはスキャン後に商品名を自動取得します。</p>
         <div id="searchLinks" class="search-grid">
-          <a data-search="google" class="search-button" href="#" target="_blank" rel="noopener noreferrer" aria-disabled="true">Google商品検索 <span aria-hidden="true">↗</span></a>
-          <a data-search="mercari" class="search-button" href="#" target="_blank" rel="noopener noreferrer" aria-disabled="true">メルカリ検索 <span aria-hidden="true">↗</span></a>
-          <a data-search="mercariSold" class="search-button" href="#" target="_blank" rel="noopener noreferrer" aria-disabled="true">メルカリ売り切れ検索 <span aria-hidden="true">↗</span></a>
-          <a data-search="yahooFlea" class="search-button" href="#" target="_blank" rel="noopener noreferrer" aria-disabled="true">Yahoo!フリマ検索 <span aria-hidden="true">↗</span></a>
-          <a data-search="yahooAuction" class="search-button" href="#" target="_blank" rel="noopener noreferrer" aria-disabled="true">Yahoo!オークション落札相場 <span aria-hidden="true">↗</span></a>
-          <a data-search="surugaya" class="search-button" href="#" target="_blank" rel="noopener noreferrer" aria-disabled="true">駿河屋検索 <span aria-hidden="true">↗</span></a>
-          <a data-search="amazon" class="search-button" href="#" target="_blank" rel="noopener noreferrer" aria-disabled="true">Amazon検索 <span aria-hidden="true">↗</span></a>
+          <a data-search="google" class="search-button" href="#" rel="noopener noreferrer" aria-disabled="true">Google商品検索 <span aria-hidden="true">↗</span></a>
+          <a data-search="mercari" class="search-button" href="#" rel="noopener noreferrer" aria-disabled="true">メルカリ検索 <span aria-hidden="true">↗</span></a>
+          <a data-search="mercariSold" class="search-button" href="#" rel="noopener noreferrer" aria-disabled="true">メルカリ売り切れ検索 <span aria-hidden="true">↗</span></a>
+          <a data-search="yahooFlea" class="search-button" href="#" rel="noopener noreferrer" aria-disabled="true">Yahoo!フリマ検索 <span aria-hidden="true">↗</span></a>
+          <a data-search="yahooAuction" class="search-button" href="#" rel="noopener noreferrer" aria-disabled="true">Yahoo!オークション落札相場 <span aria-hidden="true">↗</span></a>
+          <a data-search="surugaya" class="search-button" href="#" rel="noopener noreferrer" aria-disabled="true">駿河屋検索 <span aria-hidden="true">↗</span></a>
+          <a data-search="amazon" class="search-button" href="#" rel="noopener noreferrer" aria-disabled="true">Amazon検索 <span aria-hidden="true">↗</span></a>
         </div>
         <p id="searchHint" class="inline-hint">先にJANコードまたは商品名を入力してください。</p>
-        <p class="network-note">外部サイトの検索にはインターネット接続が必要です。</p>
+        <p class="network-note"><strong>検索モード：</strong>検索先は専用タブで開き、この入力画面は残ります。iPhoneのタブ切替で戻ると、価格キーパッドが開いた状態です。</p>
       </section>
 
       <section id="market-section" class="card" aria-labelledby="marketHeading">
@@ -226,6 +228,7 @@
               <span>売れた価格</span>
               <span class="input-with-unit"><input id="marketPriceEditor" type="text" inputmode="none" placeholder="0" readonly aria-live="polite"><span>円</span></span>
             </label>
+            <button class="voice-input-button" type="button" data-voice-target="marketPriceEditor" data-voice-mode="number"><span aria-hidden="true">🎤</span> 金額を話す</button>
             <div class="number-keypad" data-keypad-for="marketPriceEditor" aria-label="売れた価格の数字入力">
               <button type="button" data-number-key="1">1</button><button type="button" data-number-key="2">2</button><button type="button" data-number-key="3">3</button>
               <button type="button" data-number-key="4">4</button><button type="button" data-number-key="5">5</button><button type="button" data-number-key="6">6</button>
@@ -307,7 +310,7 @@
 
       <section class="privacy-note" aria-label="利用上の注意">
         <h2>安心して使うために</h2>
-        <p>通常スキャンは写真を撮りません。値札OCRで一時取得した画像も端末内だけで処理し、保存・送信しません。各販売サイトは検索画面を開くだけで、自動ログイン・購入・出品・スクレイピングは行いません。</p>
+        <p>通常スキャンは写真を撮りません。値札OCRで一時取得した画像も端末内だけで処理し、保存・送信しません。音声入力はSafariの音声認識を利用し、このアプリは録音データを保存しません。各販売サイトは検索画面を開くだけで、自動ログイン・購入・出品・スクレイピングは行いません。</p>
       </section>
     </main>
 
@@ -348,6 +351,7 @@
           <span id="numberInputLabel">金額</span>
           <input id="numberInputEditor" class="number-input-display" type="text" inputmode="none" placeholder="0" readonly aria-live="polite">
         </label>
+        <button class="voice-input-button" type="button" data-voice-target="numberInputEditor" data-voice-mode="number"><span aria-hidden="true">🎤</span> 数字を話す</button>
         <div id="generalNumberKeypad" class="number-keypad" data-keypad-for="numberInputEditor" aria-label="数字入力">
           <button type="button" data-number-key="1">1</button><button type="button" data-number-key="2">2</button><button type="button" data-number-key="3">3</button>
           <button type="button" data-number-key="4">4</button><button type="button" data-number-key="5">5</button><button type="button" data-number-key="6">6</button>
@@ -372,7 +376,7 @@
 
     <footer class="app-footer">
       <p>Barcode Profit Finder</p>
-      <p>3秒判定UI v9</p>
+      <p>検索タブ対応 v11</p>
       <p>最終判断は商品の状態、需要、各サイトの規約も確認してください。</p>
     </footer>
     <noscript>このアプリを使うにはJavaScriptを有効にしてください。</noscript>

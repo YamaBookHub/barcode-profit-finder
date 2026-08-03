@@ -24,6 +24,7 @@ class MemoryStorage {
   constructor() { this.values = new Map(); }
   getItem(key) { return this.values.has(key) ? this.values.get(key) : null; }
   setItem(key, value) { this.values.set(key, String(value)); }
+  removeItem(key) { this.values.delete(key); }
 }
 
 test("利益、利益率、ROI、損益分岐売価を正しく計算する", () => {
@@ -184,4 +185,24 @@ test("商品・設定の保存、JSON復元、CSVエスケープが機能する"
   assert.equal(repository.parseBackup(backup).items.length, 1);
   assert.equal(csvEscape('A,"B"'), '"A,""B"""');
   assert.match(itemsToCsv([item]), /商品名,JANコード/);
+});
+
+test("検索画面へ移動する前の入力途中データを保存・復元・削除できる", () => {
+  const repository = new StorageRepository(new MemoryStorage());
+  const draft = {
+    barcode: "4901234567894",
+    productName: "テスト商品",
+    purchasePrice: "1200",
+    salePrice: "3500",
+    marketPrices: ["3000", "3500", "4000", "", ""],
+    note: "棚の上段",
+    marketSearchPending: true,
+  };
+  assert.equal(repository.saveDraft(draft), true);
+  assert.deepEqual(
+    Object.fromEntries(Object.entries(repository.loadDraft()).filter(([key]) => ["barcode", "productName", "purchasePrice", "salePrice", "marketPrices", "note", "marketSearchPending"].includes(key))),
+    draft,
+  );
+  assert.equal(repository.clearDraft(), true);
+  assert.equal(repository.loadDraft(), null);
 });

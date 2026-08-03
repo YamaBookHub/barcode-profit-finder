@@ -1039,6 +1039,38 @@ textarea:focus {
   text-align: right;
 }
 
+.voice-input-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  width: 100%;
+  min-height: 52px;
+  margin-top: 0.65rem;
+  padding: 0.65rem 0.85rem;
+  border: 2px solid var(--primary);
+  border-radius: 13px;
+  background: var(--surface);
+  color: var(--primary-strong);
+  font: inherit;
+  font-weight: 900;
+}
+
+.voice-input-button span {
+  font-size: 1.15rem;
+}
+
+.voice-input-button.is-listening {
+  border-color: var(--danger);
+  background: var(--danger-soft);
+  color: var(--danger);
+  animation: voice-pulse 1s ease-in-out infinite alternate;
+}
+
+.product-voice-button {
+  margin-top: 0.55rem;
+}
+
 .number-keypad {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1526,6 +1558,11 @@ body.has-modal {
 @keyframes toast-in {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes voice-pulse {
+  from { box-shadow: 0 0 0 0 rgb(187 45 59 / 8%); }
+  to { box-shadow: 0 0 0 7px rgb(187 45 59 / 18%); }
 }
 
 @media (min-width: 620px) {
