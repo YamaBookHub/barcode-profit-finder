@@ -13,6 +13,7 @@ import {
   CAMERA_CONSTRAINT_ATTEMPTS,
   DuplicateGuard,
   cameraErrorMessage,
+  createBarcodeReader,
   extractPriceCandidates,
   normalizeBarcode,
   requestCameraStream,
@@ -96,6 +97,25 @@ test("カメラ権限拒否時にSafariの対処方法を日本語で返す", ()
   assert.match(message, /カメラの利用が許可されていません/);
   assert.match(message, /Webサイトの設定/);
   assert.match(message, /NotAllowedError/);
+});
+
+test("DecodeHintTypeを公開しないZXingブラウザ版でも読取機能を初期化できる", () => {
+  class MockReader {
+    constructor(hints, options) {
+      this.hints = hints;
+      this.options = options;
+    }
+
+    set possibleFormats(formats) { this.formats = formats; }
+  }
+  const ZXing = {
+    BrowserMultiFormatReader: MockReader,
+    BarcodeFormat: { EAN_13: 7, EAN_8: 6, UPC_A: 14, UPC_E: 15, CODE_128: 4 },
+  };
+  const reader = createBarcodeReader(ZXing);
+  assert.deepEqual(reader.formats, [7, 6, 14, 15, 4]);
+  assert.equal(reader.options.tryPlayVideoTimeout, 5000);
+  assert.equal("DecodeHintType" in ZXing, false);
 });
 
 test("iPhone向け背面カメラ制約に失敗したら単純なvideo指定へフォールバックする", async () => {

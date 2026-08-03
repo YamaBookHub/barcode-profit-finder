@@ -8,9 +8,9 @@ import {
   judgePurchase,
   normalizeSettings,
   toNonNegative,
-} from "./calculator.js?v=4";
-import { BarcodeScanner, PriceTagScanner, normalizeBarcode } from "./scanner.js?v=4";
-import { StorageRepository, itemsToCsv } from "./storage.js?v=4";
+} from "./calculator.js?v=5";
+import { BarcodeScanner, PriceTagScanner, normalizeBarcode } from "./scanner.js?v=5";
+import { StorageRepository, itemsToCsv } from "./storage.js?v=5";
 
 const byId = (id) => document.getElementById(id);
 const elements = {

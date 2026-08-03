@@ -69,6 +69,30 @@ export function cameraErrorMessage(error, manualFallback = "JANコードを手�
   return `${message}${standaloneAdvice}\nエラー識別：${name}`;
 }
 
+export function createBarcodeReader(ZXing = globalThis.ZXingBrowser) {
+  if (!ZXing?.BrowserMultiFormatReader || !ZXing?.BarcodeFormat) {
+    const error = new Error("ZXing barcode reader is unavailable");
+    error.name = "NotSupportedError";
+    throw error;
+  }
+
+  // @zxing/browser のブラウザ用バンドルは DecodeHintType を公開しないため、
+  // 公開APIの possibleFormats setter で対象形式を指定する。
+  const reader = new ZXing.BrowserMultiFormatReader(new Map(), {
+    delayBetweenScanAttempts: 80,
+    delayBetweenScanSuccess: 500,
+    tryPlayVideoTimeout: 5000,
+  });
+  reader.possibleFormats = [
+    ZXing.BarcodeFormat.EAN_13,
+    ZXing.BarcodeFormat.EAN_8,
+    ZXing.BarcodeFormat.UPC_A,
+    ZXing.BarcodeFormat.UPC_E,
+    ZXing.BarcodeFormat.CODE_128,
+  ];
+  return reader;
+}
+
 export class DuplicateGuard {
   constructor(windowMs = 3000) {
     this.windowMs = windowMs;
@@ -141,20 +165,7 @@ export class BarcodeScanner {
       this.video.setAttribute("playsinline", "");
       this.video.setAttribute("webkit-playsinline", "");
 
-      const hints = new Map();
-      hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
-        ZXing.BarcodeFormat.EAN_13,
-        ZXing.BarcodeFormat.EAN_8,
-        ZXing.BarcodeFormat.UPC_A,
-        ZXing.BarcodeFormat.UPC_E,
-        ZXing.BarcodeFormat.CODE_128,
-      ]);
-      hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
-      this.reader = new ZXing.BrowserMultiFormatReader(hints, {
-        delayBetweenScanAttempts: 80,
-        delayBetweenScanSuccess: 500,
-        tryPlayVideoTimeout: 5000,
-      });
+      this.reader = createBarcodeReader(ZXing);
 
       const stream = await requestCameraStream();
       if (sessionId !== this.sessionId) {
