@@ -1,23 +1,30 @@
-const CACHE_NAME = "barcode-profit-finder-v1";
+const CACHE_NAME = "barcode-profit-finder-v2";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./style.css",
   "./app.js",
+  "./calculator.js",
+  "./scanner.js",
+  "./storage.js",
   "./manifest.json",
   "./icons/icon.svg",
   "./icons/apple-touch-icon.png",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
   "./vendor/zxing-browser.min.js",
+  "./vendor/tesseract.min.js",
+  "./vendor/tesseract-worker.min.js",
 ];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then((cache) => cache.addAll(APP_SHELL))
-      .then(() => self.skipWaiting()),
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)),
   );
+});
+
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "SKIP_WAITING") self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {

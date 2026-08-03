@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#0d766e">
-    <meta name="description" content="バーコードを読み取り、仕入価格と売却相場から利益・利益率・ROI・仕入判定をすぐ確認できる店舗仕入れ支援ツールです。">
+    <meta name="description" content="バーコードと店舗価格から、利益・ROI・回転率を約3秒で確認する店舗せどり向けスマホPWAです。">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="利益チェッカー">
@@ -20,14 +20,18 @@
   <body>
     <a class="skip-link" href="#main">本文へ移動</a>
 
+    <div id="updateBanner" class="update-banner" role="status" hidden>
+      <span>新しいバージョンがあります</span>
+      <button id="applyUpdateButton" type="button">更新する</button>
+    </div>
+
     <header class="app-header">
       <div>
-        <p class="eyebrow">店舗仕入れの即決ツール</p>
+        <p class="eyebrow">店舗で3秒判断</p>
         <h1>バーコード利益チェッカー</h1>
       </div>
       <button id="settingsOpenButton" class="icon-button" type="button" aria-label="判定設定を開く" aria-controls="settingsPanel" aria-expanded="false">
-        <span aria-hidden="true">⚙︎</span>
-        <span>判定設定</span>
+        <span aria-hidden="true">⚙︎</span><span>判定設定</span>
       </button>
     </header>
 
@@ -51,143 +55,178 @@
           </div>
           <button id="settingsCloseButton" class="text-button" type="button">閉じる</button>
         </div>
-        <p class="help-text">「仕入候補」は利益とROIの両方を満たしたとき、「要確認」は利益基準を満たしたときに表示します。</p>
-        <form id="settingsForm" class="form-grid">
-          <label>
-            <span>仕入候補にする利益</span>
-            <span class="input-with-unit"><input id="candidateProfitInput" type="number" min="0" step="100" inputmode="numeric" required><span>円以上</span></span>
-          </label>
-          <label>
-            <span>仕入候補にするROI</span>
-            <span class="input-with-unit"><input id="candidateRoiInput" type="number" min="0" step="1" inputmode="decimal" required><span>%以上</span></span>
-          </label>
-          <label>
-            <span>要確認にする利益</span>
-            <span class="input-with-unit"><input id="reviewProfitInput" type="number" min="0" step="100" inputmode="numeric" required><span>円以上</span></span>
-          </label>
+        <p class="help-text">上から順に判定します。利益とROIの両方を満たすと「買い」です。</p>
+        <form id="settingsForm" class="form-grid settings-grid">
+          <label><span>強い候補：利益</span><span class="input-with-unit"><input id="strongProfitInput" type="number" min="0" step="100" inputmode="numeric" required><span>円</span></span></label>
+          <label><span>強い候補：ROI</span><span class="input-with-unit"><input id="strongRoiInput" type="number" min="0" step="1" inputmode="decimal" required><span>%</span></span></label>
+          <label><span>候補：利益</span><span class="input-with-unit"><input id="candidateProfitInput" type="number" min="0" step="100" inputmode="numeric" required><span>円</span></span></label>
+          <label><span>候補：ROI</span><span class="input-with-unit"><input id="candidateRoiInput" type="number" min="0" step="1" inputmode="decimal" required><span>%</span></span></label>
+          <label><span>要確認：利益</span><span class="input-with-unit"><input id="reviewProfitInput" type="number" min="0" step="100" inputmode="numeric" required><span>円</span></span></label>
+          <label><span>利益振動の基準</span><span class="input-with-unit"><input id="highProfitVibrationInput" type="number" min="0" step="100" inputmode="numeric" required><span>円</span></span></label>
           <div class="button-row full-width">
             <button class="primary-button" type="submit">設定を保存</button>
             <button id="settingsResetButton" class="secondary-button" type="button">初期値に戻す</button>
           </div>
+          <button id="replayTutorialButton" class="text-button full-width" type="button">使い方をもう一度見る</button>
         </form>
       </section>
 
-      <section class="card scanner-card" aria-labelledby="scanHeading">
+      <section id="scan-section" class="card scanner-card" aria-labelledby="scanHeading">
         <div class="section-heading">
           <p class="step-label"><span>1</span> スキャン</p>
           <h2 id="scanHeading">商品のバーコードを読む</h2>
-          <p>横線がバーコード全体に重なるよう、カメラをゆっくり近づけてください。</p>
-          <p class="camera-privacy">写真は撮影・保存しません。ライブ映像を端末内で読み取るため、シャッター音は鳴りません。</p>
+          <p>バーコード全体を横向きで枠に合わせます。</p>
+          <p class="camera-privacy">無音のライブ解析のみ。写真・音声の撮影、保存、送信はしません。</p>
         </div>
 
         <div id="cameraFrame" class="camera-frame">
           <video id="cameraVideo" muted playsinline aria-label="バーコード読取用カメラ"></video>
-          <div class="scan-guide" aria-hidden="true">
-            <span></span>
-          </div>
+          <div class="scan-guide barcode-guide" aria-hidden="true"><span></span></div>
           <p id="cameraPlaceholder" class="camera-placeholder">「カメラを開始」を押してください</p>
           <p id="scanSuccess" class="scan-success" hidden>✓ 読み取りました</p>
         </div>
-
         <p id="cameraStatus" class="status-message" role="status">カメラは停止中です</p>
         <div id="cameraError" class="error-message" role="alert" hidden></div>
-
         <div class="camera-controls">
           <button id="startScanButton" class="primary-button" type="button">カメラを開始</button>
           <button id="stopScanButton" class="secondary-button" type="button" disabled>停止</button>
           <button id="rescanButton" class="secondary-button" type="button">再スキャン</button>
         </div>
-
         <label class="field-block barcode-field" for="barcodeInput">
           <span>JANコード／バーコード</span>
-          <input id="barcodeInput" name="barcode" type="text" inputmode="text" enterkeyhint="done" autocapitalize="characters" autocomplete="off" placeholder="例：4901234567894">
-          <small>カメラが使えない場合は手入力できます。CODE-128の英数字にも対応します。</small>
+          <input id="barcodeInput" type="text" inputmode="text" enterkeyhint="next" autocapitalize="characters" autocomplete="off" placeholder="例：4901234567894">
+          <small>手入力とCODE-128の英数字にも対応します。</small>
         </label>
       </section>
 
-      <section class="card" aria-labelledby="searchHeading">
+      <section id="purchase-section" class="card" aria-labelledby="purchaseHeading">
         <div class="section-heading">
-          <p class="step-label"><span>2</span> 相場確認</p>
-          <h2 id="searchHeading">販売相場を調べる</h2>
-          <p>入力したバーコードで各サイトの検索画面を開きます。</p>
+          <p class="step-label"><span>2</span> 仕入価格</p>
+          <h2 id="purchaseHeading">値札を読む、または価格を入力</h2>
+          <p>OCR候補から選ぶか、数字を直接入力します。</p>
         </div>
+        <button id="openPriceScannerButton" class="scan-price-button" type="button"><span aria-hidden="true">▣</span> 値札をカメラで読み取る</button>
+
+        <div id="priceScannerPanel" class="price-scanner-panel" hidden>
+          <div class="camera-frame price-camera-frame">
+            <video id="priceCameraVideo" muted playsinline aria-label="値札読取用カメラ"></video>
+            <div class="price-guide" aria-hidden="true">値段をここに大きく</div>
+            <p id="priceCameraPlaceholder" class="camera-placeholder">「値札カメラを開始」を押してください</p>
+          </div>
+          <canvas id="priceCaptureCanvas" class="price-preview" width="1" height="1" aria-label="端末内で一時処理中の値札画像"></canvas>
+          <p id="priceCameraStatus" class="status-message" role="status">値札カメラは停止中です</p>
+          <div id="priceCameraError" class="error-message" role="alert" hidden></div>
+          <progress id="ocrProgress" class="ocr-progress" max="1" value="0" hidden></progress>
+          <div class="camera-controls price-controls">
+            <button id="startPriceCameraButton" class="secondary-button" type="button">値札カメラを開始</button>
+            <button id="capturePriceButton" class="primary-button" type="button" disabled>この値札を読み取る</button>
+            <button id="closePriceScannerButton" class="secondary-button" type="button">閉じる</button>
+          </div>
+          <div id="priceCandidates" class="price-candidates" aria-live="polite"></div>
+          <p class="privacy-inline">値札読取時だけ1フレームをメモリ上で解析し、サーバーへ送信・保存しません。シャッター音も鳴りません。</p>
+        </div>
+
+        <div class="form-grid purchase-fields">
+          <label><span>仕入価格 <em>必須</em></span><span class="input-with-unit"><input id="purchasePriceInput" type="number" min="0" step="1" inputmode="numeric" placeholder="0" required><span>円</span></span></label>
+          <label><span>店舗名</span><input id="storeNameInput" type="text" enterkeyhint="next" placeholder="例：○○店"></label>
+        </div>
+      </section>
+
+      <section id="search-section" class="card" aria-labelledby="searchHeading">
+        <div class="section-heading">
+          <p class="step-label"><span>3</span> 相場検索</p>
+          <h2 id="searchHeading">販売相場を調べる</h2>
+          <p>JANコードを優先し、未入力なら商品名で検索します。</p>
+        </div>
+        <label class="field-block" for="productNameInput"><span>商品名</span><input id="productNameInput" type="text" enterkeyhint="next" placeholder="例：ワイヤレスイヤホン"></label>
         <div id="searchLinks" class="search-grid">
           <a data-search="google" class="search-button" href="#" target="_blank" rel="noopener noreferrer" aria-disabled="true">Google商品検索 <span aria-hidden="true">↗</span></a>
           <a data-search="mercari" class="search-button" href="#" target="_blank" rel="noopener noreferrer" aria-disabled="true">メルカリ検索 <span aria-hidden="true">↗</span></a>
-          <a data-search="mercariSold" class="search-button" href="#" target="_blank" rel="noopener noreferrer" aria-disabled="true">メルカリ売り切れ相場 <span aria-hidden="true">↗</span></a>
-          <a data-search="surugaya" class="search-button" href="#" target="_blank" rel="noopener noreferrer" aria-disabled="true">駿河屋検索 <span aria-hidden="true">↗</span></a>
+          <a data-search="mercariSold" class="search-button" href="#" target="_blank" rel="noopener noreferrer" aria-disabled="true">メルカリ売り切れ検索 <span aria-hidden="true">↗</span></a>
           <a data-search="yahooFlea" class="search-button" href="#" target="_blank" rel="noopener noreferrer" aria-disabled="true">Yahoo!フリマ検索 <span aria-hidden="true">↗</span></a>
           <a data-search="yahooAuction" class="search-button" href="#" target="_blank" rel="noopener noreferrer" aria-disabled="true">Yahoo!オークション落札相場 <span aria-hidden="true">↗</span></a>
+          <a data-search="surugaya" class="search-button" href="#" target="_blank" rel="noopener noreferrer" aria-disabled="true">駿河屋検索 <span aria-hidden="true">↗</span></a>
+          <a data-search="amazon" class="search-button" href="#" target="_blank" rel="noopener noreferrer" aria-disabled="true">Amazon検索 <span aria-hidden="true">↗</span></a>
         </div>
-        <p id="searchHint" class="inline-hint">先にバーコードを読み取るか入力してください。</p>
+        <p id="searchHint" class="inline-hint">先にJANコードまたは商品名を入力してください。</p>
+        <p class="network-note">外部サイトの検索にはインターネット接続が必要です。</p>
       </section>
 
-      <section class="card" aria-labelledby="priceHeading">
+      <section id="market-section" class="card" aria-labelledby="marketHeading">
         <div class="section-heading">
-          <p class="step-label"><span>3</span> 価格入力</p>
-          <h2 id="priceHeading">仕入れと販売の条件を入れる</h2>
-          <p>入力するたびに利益と判定を更新します。</p>
+          <p class="step-label"><span>4</span> 売却相場</p>
+          <h2 id="marketHeading">売れた価格を最大5件入力</h2>
+          <p>中央値を想定売価へ自動反映します。</p>
         </div>
+        <div class="market-price-grid">
+          <label><span>相場 1</span><span class="input-with-unit"><input class="market-price-input" type="number" min="0" step="1" inputmode="numeric" aria-label="販売済み価格1"><span>円</span></span></label>
+          <label><span>相場 2</span><span class="input-with-unit"><input class="market-price-input" type="number" min="0" step="1" inputmode="numeric" aria-label="販売済み価格2"><span>円</span></span></label>
+          <label><span>相場 3</span><span class="input-with-unit"><input class="market-price-input" type="number" min="0" step="1" inputmode="numeric" aria-label="販売済み価格3"><span>円</span></span></label>
+          <label><span>相場 4</span><span class="input-with-unit"><input class="market-price-input" type="number" min="0" step="1" inputmode="numeric" aria-label="販売済み価格4"><span>円</span></span></label>
+          <label><span>相場 5</span><span class="input-with-unit"><input class="market-price-input" type="number" min="0" step="1" inputmode="numeric" aria-label="販売済み価格5"><span>円</span></span></label>
+        </div>
+        <dl class="market-stats">
+          <div class="primary-stat"><dt>中央値</dt><dd id="medianResult">―</dd></div>
+          <div><dt>平均値</dt><dd id="averageResult">―</dd></div>
+          <div><dt>最安値</dt><dd id="minimumResult">―</dd></div>
+          <div><dt>最高値</dt><dd id="maximumResult">―</dd></div>
+          <div><dt>相場件数</dt><dd id="marketCountResult">0件</dd></div>
+        </dl>
+        <label class="field-block sale-price-field"><span>想定売却価格 <em>必須</em></span><span class="input-with-unit"><input id="salePriceInput" type="number" min="0" step="1" inputmode="numeric" placeholder="中央値を自動反映" required><span>円</span></span></label>
 
+        <details class="turnover-panel">
+          <summary>回転率も確認する <small>売れやすさの目安</small></summary>
+          <div class="form-grid turnover-fields">
+            <label><span>販売済み件数</span><input id="soldCountInput" type="number" min="0" step="1" inputmode="numeric" placeholder="例：10"></label>
+            <label><span>現在出品数</span><input id="activeCountInput" type="number" min="0" step="1" inputmode="numeric" placeholder="例：5"></label>
+            <label><span>直近売却日</span><input id="recentSaleDateInput" type="date"></label>
+            <label><span>相場確認日</span><input id="checkedDateInput" type="date"></label>
+          </div>
+          <div id="turnoverResult" class="turnover-result is-insufficient" aria-live="polite">
+            <strong>データ不足</strong><span>販売済み件数と現在出品数を入力してください</span>
+          </div>
+        </details>
+      </section>
+
+      <section id="verdict-section" class="card calculation-card" aria-labelledby="resultHeading">
+        <div class="section-heading">
+          <p class="step-label"><span>5</span> 判定</p>
+          <h2 id="resultHeading">費用を入れて最終判断</h2>
+          <p>ROIは、仕入価格に対して何%の利益が出るかを示します。</p>
+        </div>
         <form id="profitForm" class="form-grid" autocomplete="off">
-          <label class="full-width">
-            <span>商品名</span>
-            <input id="productNameInput" type="text" enterkeyhint="next" placeholder="例：ワイヤレスイヤホン">
-          </label>
-          <label>
-            <span>仕入価格 <em>必須</em></span>
-            <span class="input-with-unit"><input id="purchasePriceInput" type="number" min="0" step="1" inputmode="numeric" placeholder="0" required><span>円</span></span>
-          </label>
-          <label>
-            <span>想定売却価格 <em>必須</em></span>
-            <span class="input-with-unit"><input id="salePriceInput" type="number" min="0" step="1" inputmode="numeric" placeholder="0" required><span>円</span></span>
-          </label>
-          <label>
-            <span>販売手数料率</span>
-            <span class="input-with-unit"><input id="feeRateInput" type="number" min="0" max="100" step="0.1" inputmode="decimal" value="10"><span>%</span></span>
-          </label>
-          <label>
-            <span>送料</span>
-            <span class="input-with-unit"><input id="shippingInput" type="number" min="0" step="1" inputmode="numeric" value="0"><span>円</span></span>
-          </label>
-          <label>
-            <span>梱包費</span>
-            <span class="input-with-unit"><input id="packagingInput" type="number" min="0" step="1" inputmode="numeric" value="0"><span>円</span></span>
-          </label>
-          <label>
-            <span>その他経費</span>
-            <span class="input-with-unit"><input id="otherCostsInput" type="number" min="0" step="1" inputmode="numeric" value="0"><span>円</span></span>
-          </label>
+          <label><span>販売手数料率</span><span class="input-with-unit"><input id="feeRateInput" type="number" min="0" max="100" step="0.1" inputmode="decimal" value="10"><span>%</span></span></label>
+          <label><span>送料</span><span class="input-with-unit"><input id="shippingInput" type="number" min="0" step="1" inputmode="numeric" value="0"><span>円</span></span></label>
+          <label><span>梱包費</span><span class="input-with-unit"><input id="packagingInput" type="number" min="0" step="1" inputmode="numeric" value="0"><span>円</span></span></label>
+          <label><span>その他経費</span><span class="input-with-unit"><input id="otherCostsInput" type="number" min="0" step="1" inputmode="numeric" value="0"><span>円</span></span></label>
+          <label class="full-width"><span>メモ</span><textarea id="noteInput" rows="3" placeholder="状態、棚番号、注意点など"></textarea></label>
         </form>
-      </section>
-
-      <section id="calculationSection" class="card calculation-card" aria-labelledby="resultHeading">
-        <div class="section-heading">
-          <p class="step-label"><span>4</span> 判定</p>
-          <h2 id="resultHeading">利益の内訳</h2>
-        </div>
         <dl class="result-grid">
           <div><dt>販売手数料</dt><dd id="feeResult">0円</dd></div>
-          <div><dt>手取り額</dt><dd id="netResult">0円</dd></div>
+          <div><dt>売却後の手取り</dt><dd id="netResult">0円</dd></div>
           <div class="emphasis"><dt>予想利益</dt><dd id="profitResult">0円</dd></div>
           <div><dt>利益率</dt><dd id="marginResult">―</dd></div>
-          <div><dt>ROI（仕入効率）</dt><dd id="roiResult">―</dd></div>
+          <div><dt>ROI <button class="term-help" type="button" data-help="ROIは予想利益÷仕入価格。仕入資金の効率を示します。" aria-label="ROIの説明">?</button></dt><dd id="roiResult">―</dd></div>
           <div><dt>損益分岐売価</dt><dd id="breakEvenResult">0円</dd></div>
         </dl>
-        <p class="formula-note">利益率＝利益÷売価、ROI＝利益÷仕入価格で計算。手数料は1円未満を切り捨てます。</p>
+        <p class="formula-note">利益＝売価－手数料－送料－梱包費－その他経費－仕入価格。手数料は1円未満を切り捨てます。</p>
         <div class="save-actions">
           <button id="saveItemButton" class="primary-button" type="button">この商品を保存</button>
           <button id="cancelEditButton" class="secondary-button" type="button" hidden>編集をキャンセル</button>
         </div>
       </section>
 
-      <section class="card saved-card" aria-labelledby="savedHeading">
+      <section id="saved-section" class="card saved-card" aria-labelledby="savedHeading">
         <div class="section-title-row">
-          <div class="section-heading compact">
-            <p class="step-label">保存</p>
-            <h2 id="savedHeading">保存した商品</h2>
-          </div>
-          <button id="exportCsvButton" class="secondary-button small-button" type="button" disabled>CSV出力</button>
+          <div class="section-heading compact"><p class="step-label">保存</p><h2 id="savedHeading">保存した商品</h2></div>
+          <span id="savedCountBadge" class="count-badge">0件</span>
+        </div>
+        <label class="field-block" for="savedSearchInput"><span>保存商品を検索</span><input id="savedSearchInput" type="search" placeholder="商品名・JAN・店舗名・メモ"></label>
+        <div class="data-actions">
+          <button id="exportCsvButton" class="secondary-button" type="button" disabled>CSV出力</button>
+          <button id="backupJsonButton" class="secondary-button" type="button" disabled>JSONバックアップ</button>
+          <button id="restoreJsonButton" class="secondary-button" type="button">JSON復元</button>
+          <input id="restoreJsonInput" type="file" accept="application/json,.json" hidden>
         </div>
         <p id="savedSummary" class="saved-summary">保存した商品はありません。</p>
         <div id="savedItemsList" class="saved-list"></div>
@@ -195,17 +234,49 @@
 
       <section class="privacy-note" aria-label="利用上の注意">
         <h2>安心して使うために</h2>
-        <p>カメラ映像はバーコード読取だけに使い、写真の撮影・保存・送信はしません。入力データはこのブラウザ内だけに保存します。各販売サイトは検索画面を開くだけで、自動ログイン・購入・出品・スクレイピングは行いません。</p>
+        <p>通常スキャンは写真を撮りません。値札OCRで一時取得した画像も端末内だけで処理し、保存・送信しません。各販売サイトは検索画面を開くだけで、自動ログイン・購入・出品・スクレイピングは行いません。</p>
       </section>
     </main>
 
+    <div id="tutorialOverlay" class="tutorial-overlay" role="dialog" aria-modal="true" aria-labelledby="tutorialTitle" hidden>
+      <div class="tutorial-card">
+        <p class="tutorial-progress"><span id="tutorialStepText">1 / 3</span></p>
+        <div class="tutorial-slide" data-tutorial-slide="0">
+          <span class="tutorial-icon" aria-hidden="true">▤</span>
+          <h2 id="tutorialTitle">まずバーコードを読む</h2>
+          <p>「カメラを開始」→バーコードを枠内へ。無音のライブ解析で写真は撮りません。</p>
+        </div>
+        <div class="tutorial-slide" data-tutorial-slide="1" hidden>
+          <span class="tutorial-icon" aria-hidden="true">¥</span>
+          <h2>値札を読むか手入力</h2>
+          <p>OCRは任意です。候補金額をタップすると仕入価格へ入ります。誤認識時は手入力できます。</p>
+        </div>
+        <div class="tutorial-slide" data-tutorial-slide="2" hidden>
+          <span class="tutorial-icon" aria-hidden="true">✓</span>
+          <h2>相場を入れて即判断</h2>
+          <p>販売済み価格を入れると中央値を自動採用。「買い・要確認・見送り」を上部で確認します。</p>
+        </div>
+        <div class="tutorial-actions">
+          <button id="tutorialSkipButton" class="text-button" type="button">スキップ</button>
+          <button id="tutorialNextButton" class="primary-button" type="button">次へ</button>
+        </div>
+      </div>
+    </div>
+
     <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+    <nav class="bottom-nav" aria-label="主要画面">
+      <a href="#scan-section"><span aria-hidden="true">▤</span>スキャン</a>
+      <a href="#purchase-section"><span aria-hidden="true">¥</span>仕入</a>
+      <a href="#search-section"><span aria-hidden="true">⌕</span>相場</a>
+      <a href="#verdict-section"><span aria-hidden="true">✓</span>判定</a>
+      <a href="#saved-section"><span aria-hidden="true">▣</span>保存</a>
+    </nav>
 
     <footer class="app-footer">
       <p>Barcode Profit Finder</p>
-      <p>店舗では通信状況と実際の販売条件もあわせて確認してください。</p>
+      <p>最終判断は商品の状態、需要、各サイトの規約も確認してください。</p>
     </footer>
-
     <noscript>このアプリを使うにはJavaScriptを有効にしてください。</noscript>
   </body>
 </html>
